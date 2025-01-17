@@ -2,7 +2,11 @@ local M = {}
 
 M.defaults = {
 	keybind = "<leader>tg",
-	pet = { name = "Ilya" },
+	pet = { name = "Ilya", sprites = {
+		happy = ":-)",
+		hungry = ":-(",
+		sad = ":'(",
+	} },
 	ui = { width = 50, height = 15 },
 }
 

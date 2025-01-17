@@ -2,10 +2,13 @@ local config = require("tamagotchi.config")
 local Pet = require("tamagotchi.pet")
 local M = {}
 
-local pet_instance = Pet:new(config.options.pet.name, config.options.pet.sprites)
+local pet_instance
 local win, buf
 
 function M.create_window()
+	if not pet_instance then
+		pet_instance = Pet:new(config.options.pet.name, config.options.pet.sprites)
+	end
 	buf = vim.api.nvim_create_buf(false, true)
 
 	local width = config.options.ui.width
