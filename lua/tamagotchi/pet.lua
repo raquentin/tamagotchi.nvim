@@ -11,6 +11,11 @@ function Pet:new(name, sprites)
 	return obj
 end
 
+function Pet:initialize(config_pet)
+	self.name = config_pet.name or self.name
+	self.sprites = config_pet.sprites or self.sprites
+end
+
 function Pet:update(event) end
 
 function Pet:get_sprite()

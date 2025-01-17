@@ -5,10 +5,18 @@ local M = {}
 local pet_instance
 local win, buf
 
+local function create_bar(label, value, max, length)
+	length = length or 20
+	local filled_length = math.floor((value / max) * length)
+	local bar = string.rep("█", filled_length) .. string.rep("░", length - filled_length)
+	return label .. ": [" .. bar .. "] " .. value .. "/" .. max
+end
+
 function M.create_window()
 	if not pet_instance then
 		pet_instance = Pet:new(config.options.pet.name, config.options.pet.sprites)
 	end
+
 	buf = vim.api.nvim_create_buf(false, true)
 
 	local width = config.options.ui.width
@@ -31,9 +39,9 @@ end
 function M.render()
 	vim.api.nvim_buf_set_lines(buf, 0, -1, false, {
 		pet_instance:get_sprite(),
-		"Happiness: " .. pet_instance.happiness,
-		"Hunger: " .. pet_instance.hunger,
-		"Energy: " .. pet_instance.energy,
+		create_bar("Happiness", pet_instance.happiness, 100),
+		create_bar("Hunger", pet_instance.hunger, 100),
+		create_bar("Energy", pet_instance.energy, 100),
 	})
 end
 
