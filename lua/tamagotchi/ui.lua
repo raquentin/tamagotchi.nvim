@@ -18,7 +18,7 @@ function M.create_window()
 		width = width,
 		height = height,
 		row = (vim.o.lines - height) / 2 - 1,
-		column = (vim.o.columns - width) / 2,
+		col = (vim.o.columns - width) / 2,
 		style = "minimal",
 		border = "rounded",
 	}
