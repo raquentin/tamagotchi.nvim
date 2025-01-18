@@ -2,6 +2,7 @@ local M = {}
 
 M.defaults = {
     keybind = "<leader>tg",
+    default_pet = "Tamagotchi",
     pets = {
         {
             name = "Tamagotchi",

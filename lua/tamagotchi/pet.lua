@@ -4,10 +4,10 @@ Pet.__index = Pet
 function Pet:new(o)
     o = o or {}
     setmetatable(o, Pet)
-    o.name = o.name or "Anonymous Pet"
+    o.name = o.name
     o.satiety = o.satiety or 80
     o.mood = o.mood or 80
-    o.birth_time = vim.loop.now()
+    o.birth_time = o.birth_time or vim.loop.now()
 
     local config = require("tamagotchi.config").values
 
@@ -63,10 +63,24 @@ end
 
 -- decrement satiety and mood
 function Pet:update()
-    self:set_satiety(math.max(1, self.satiety - 1))
-    self:set_mood(math.max(1, self.mood - 1))
+    local decrement_chance = 0.01 -- 1% chance to decrement on a given tick
+    if math.random() < decrement_chance then
+        self:set_satiety(math.max(1, self.satiety - 1))
+    end
+    if math.random() < decrement_chance then
+        self:set_mood(math.max(1, self.mood - 1))
+    end
 end
 
+function Pet:increase_mood(amount)
+    amount = amount or 1
+    self:set_mood(self.mood + amount)
+end
+
+function Pet:increase_satiety(amount)
+    amount = amount or 1
+    self:set_satiety(self.satiety + amount)
+end
 ------------------------------------------------------------------------
 -- sprite logic
 ------------------------------------------------------------------------

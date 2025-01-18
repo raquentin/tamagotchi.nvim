@@ -42,3 +42,46 @@ describe("pet object", function()
         assert.is_true(new_age >= initial_age)
     end)
 end)
+
+describe("pet attribute increase", function()
+    local pet
+    before_each(function() pet = Pet:new({ satiety = 50, mood = 50 }) end)
+
+    it("should increase mood", function()
+        pet:increase_mood(10)
+        assert.are.equal(60, pet:get_mood())
+    end)
+
+    it("should not exceed 100 mood", function()
+        pet:set_mood(95)
+        pet:increase_mood(10)
+        assert.are.equal(100, pet:get_mood())
+    end)
+
+    it("should increase satiety", function()
+        pet:increase_satiety(5)
+        assert.are.equal(55, pet:get_satiety())
+    end)
+
+    it("should not exceed 100 satiety", function()
+        pet:set_satiety(98)
+        pet:increase_satiety(5)
+        assert.are.equal(100, pet:get_satiety())
+    end)
+end)
+
+describe("pet update randomness", function()
+    local pet
+    before_each(function()
+        math.randomseed(123)
+        pet = Pet:new({ satiety = 80, mood = 80 })
+    end)
+
+    it("should not increase attributes during update", function()
+        local initial_satiety = pet:get_satiety()
+        local initial_mood = pet:get_mood()
+        pet:update()
+        assert.is_true(pet:get_satiety() <= initial_satiety)
+        assert.is_true(pet:get_mood() <= initial_mood)
+    end)
+end)
