@@ -29,6 +29,14 @@ function Pet:new(o)
     return o
 end
 
+------------------------------------------------------------------------
+-- get / set
+------------------------------------------------------------------------
+
+function Pet:set_name(value) self.name = value end
+
+function Pet:get_name() return self.name end
+
 function Pet:get_satiety() return self.satiety end
 
 function Pet:set_satiety(value) self.satiety = math.max(1, math.min(100, value)) end
@@ -37,17 +45,65 @@ function Pet:get_mood() return self.mood end
 
 function Pet:set_mood(value) self.mood = math.max(1, math.min(100, value)) end
 
--- get current pet age in ms
 function Pet:get_age() return vim.loop.now() - self.birth_time end
 
 -- convert pet to a plain table for serialization
 function Pet:to_table()
     return {
+        name = self.name,
         satiety = self.satiety,
         mood = self.mood,
         birth_time = self.birth_time,
     }
 end
+
+------------------------------------------------------------------------
+-- state updating
+------------------------------------------------------------------------
+
+-- decrement satiety and mood
+function Pet:update()
+    self:set_satiety(math.max(1, self.satiety - 1))
+    self:set_mood(math.max(1, self.mood - 1))
+end
+
+------------------------------------------------------------------------
+-- sprite logic
+------------------------------------------------------------------------
+
+local function determine_state(pet)
+    if pet.satiety < 70 then
+        return "hungry"
+    elseif pet.mood > 70 then
+        return "happy"
+    else
+        return "neutral"
+    end
+end
+
+function Pet:get_sprite()
+    local state = determine_state(self)
+
+    -- reset sprite index if state has changed
+    if not self.last_state or self.last_state ~= state then
+        self.last_state = state
+        self.sprite_indices[state] = 1
+    end
+
+    local sprite_list = self.sprites[state] or {}
+    if #sprite_list == 0 then return "" end
+
+    local idx = self.sprite_indices[state] or 1
+    local sprite = sprite_list[idx] or sprite_list[1]
+
+    self.sprite_indices[state] = (idx % #sprite_list) + 1
+
+    return sprite
+end
+
+------------------------------------------------------------------------
+-- persistence
+------------------------------------------------------------------------
 
 -- save pet state to a file (default path in Neovim data directory)
 function Pet:save(filepath)
@@ -77,34 +133,4 @@ function Pet.load(filepath)
     return Pet:new(data)
 end
 
-local function determine_state(pet)
-    if pet.satiety < 70 then
-        return "hungry"
-    elseif pet.mood > 70 then
-        return "happy"
-    else
-        return "neutral"
-    end
-end
-
-function Pet:get_sprite()
-    local state = determine_state(self)
-
-    -- reset sprite index if state has changed
-    if not self.last_state or self.last_state ~= state then
-        self.last_state = state
-        self.sprite_indices[state] = 1
-    end
-
-    local sprite_list = self.sprites[state] or {}
-    if #sprite_list == 0 then return "" end
-    -- TODO: log
-
-    local idx = self.sprite_indices[state] or 1
-    local sprite = sprite_list[idx] or sprite_list[1]
-
-    self.sprite_indices[state] = (idx % #sprite_list) + 1
-
-    return sprite
-end
 return Pet

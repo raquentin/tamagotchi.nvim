@@ -3,7 +3,7 @@ local assert = require("luassert")
 
 -- minimal mock pet that implements the methods window.lua needs
 local mock_pet = {
-    name = "Mocky",
+    get_name = function() return "Mock Name" end,
     get_sprite = function() return "mock_sprite" end,
     get_age = function() return 0 end,
     get_satiety = function() return 50 end,
