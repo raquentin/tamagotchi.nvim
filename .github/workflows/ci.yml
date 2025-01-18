@@ -41,11 +41,10 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v3
-      - uses: rhysd/action-setup-vim@v1
-        id: vim
-        with:
-          neovim: true
-          version: nightly
+
+      - name: Install Neovim
+        run: |
+          sudo apt-get install -y neovim
 
       - name: luajit
         uses: leafo/gh-actions-lua@v10
