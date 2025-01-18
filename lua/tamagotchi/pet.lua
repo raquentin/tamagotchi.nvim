@@ -54,6 +54,11 @@ end
 -- save pet state to a file (default path in Neovim data directory)
 function Pet:save(filepath)
     filepath = filepath or (vim.fn.stdpath("data") .. "/tamagotchi.json")
+
+    -- ensure dir exists
+    local dir = vim.fn.fnamemodify(filepath, ":h")
+    if vim.fn.isdirectory(dir) == 0 then vim.fn.mkdir(dir, "p") end
+
     local data = vim.fn.json_encode(self:to_table())
     vim.fn.writefile({ data }, filepath)
 end
