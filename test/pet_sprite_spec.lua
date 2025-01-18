@@ -29,9 +29,9 @@ describe("pet sprite selection", function()
         assert.is_not_nil(test_pet_def)
     end)
 
-    it("should return happy sprite if happiness > 70", function()
+    it("should return happy sprite if mood > 70", function()
         local pet = Pet:new({
-            happiness = 80,
+            mood = 80,
             satiety = 80,
             sprites = test_pet_def.sprites,
         })
@@ -39,22 +39,19 @@ describe("pet sprite selection", function()
         assert.is_true(sprite == ":)" or sprite == ":-D")
     end)
 
-    it(
-        "should return neutral sprite if satiety > 70 and happiness <= 70",
-        function()
-            local pet = Pet:new({
-                happiness = 50,
-                satiety = 80,
-                sprites = test_pet_def.sprites,
-            })
-            local sprite = pet:get_sprite()
-            assert.is_true(sprite == ":|" or sprite == "-_-")
-        end
-    )
+    it("should return neutral sprite if satiety > 70 and mood <= 70", function()
+        local pet = Pet:new({
+            mood = 50,
+            satiety = 80,
+            sprites = test_pet_def.sprites,
+        })
+        local sprite = pet:get_sprite()
+        assert.is_true(sprite == ":|" or sprite == "-_-")
+    end)
 
     it("should return hungry sprite if satiety is low", function()
         local pet = Pet:new({
-            happiness = 80,
+            mood = 80,
             satiety = 50,
             sprites = test_pet_def.sprites,
         })
@@ -90,9 +87,9 @@ describe("pet sprite cycling and state reset", function()
         assert.is_not_nil(test_pet_def)
     end)
 
-    it("should cycle through happy sprites when happiness > 70", function()
+    it("should cycle through happy sprites when mood > 70", function()
         local pet = Pet:new({
-            happiness = 80,
+            mood = 80,
             satiety = 80,
             sprites = test_pet_def.sprites,
         })
@@ -110,7 +107,7 @@ describe("pet sprite cycling and state reset", function()
 
     it("should reset sprite index on state change", function()
         local pet = Pet:new({
-            happiness = 80,
+            mood = 80,
             satiety = 80,
             sprites = test_pet_def.sprites,
         })
@@ -119,8 +116,8 @@ describe("pet sprite cycling and state reset", function()
         -- cycle once to be in happy state
         pet:get_sprite()
 
-        -- change state: lower happiness to switch sprite set
-        pet.happiness = 50
+        -- change state: lower mood to switch sprite set
+        pet.mood = 50
         local neutral_sprite = pet:get_sprite()
 
         -- after state change, sprite index for 'neutral' should reset to first sprite

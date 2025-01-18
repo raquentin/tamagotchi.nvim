@@ -6,7 +6,7 @@ function Pet:new(o)
     setmetatable(o, Pet)
     o.name = o.name or "Anonymous Pet"
     o.satiety = o.satiety or 80
-    o.happiness = o.happiness or 80
+    o.mood = o.mood or 80
     o.birth_time = vim.loop.now()
 
     local config = require("tamagotchi.config").values
@@ -33,11 +33,9 @@ function Pet:get_satiety() return self.satiety end
 
 function Pet:set_satiety(value) self.satiety = math.max(1, math.min(100, value)) end
 
-function Pet:get_happiness() return self.happiness end
+function Pet:get_mood() return self.mood end
 
-function Pet:set_happiness(value)
-    self.happiness = math.max(1, math.min(100, value))
-end
+function Pet:set_mood(value) self.mood = math.max(1, math.min(100, value)) end
 
 -- get current pet age in ms
 function Pet:get_age() return vim.loop.now() - self.birth_time end
@@ -46,7 +44,7 @@ function Pet:get_age() return vim.loop.now() - self.birth_time end
 function Pet:to_table()
     return {
         satiety = self.satiety,
-        happiness = self.happiness,
+        mood = self.mood,
         birth_time = self.birth_time,
     }
 end
@@ -82,7 +80,7 @@ end
 local function determine_state(pet)
     if pet.satiety < 70 then
         return "hungry"
-    elseif pet.happiness > 70 then
+    elseif pet.mood > 70 then
         return "happy"
     else
         return "neutral"

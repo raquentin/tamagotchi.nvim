@@ -7,7 +7,7 @@ local mock_pet = {
     get_sprite = function() return "mock_sprite" end,
     get_age = function() return 0 end,
     get_satiety = function() return 50 end,
-    get_happiness = function() return 50 end,
+    get_mood = function() return 50 end,
 }
 
 describe("window toggle functionality", function()

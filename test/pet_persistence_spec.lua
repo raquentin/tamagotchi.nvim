@@ -7,7 +7,7 @@ describe("pet persistence", function()
     local pet
 
     before_each(function()
-        pet = Pet:new({ satiety = 80, happiness = 80 })
+        pet = Pet:new({ satiety = 80, mood = 80 })
         -- ensure clean test file each time
         if vim.fn.filereadable(test_filepath) == 1 then
             vim.fn.delete(test_filepath)
@@ -29,7 +29,7 @@ describe("pet persistence", function()
         local content = table.concat(lines, "")
         local data = vim.fn.json_decode(content)
         assert.are.equal(80, data.satiety)
-        assert.are.equal(80, data.happiness)
+        assert.are.equal(80, data.mood)
         assert.is_true(type(data.birth_time) == "number")
     end)
 
@@ -38,7 +38,7 @@ describe("pet persistence", function()
         local loaded_pet = Pet.load(test_filepath)
         assert.is_not_nil(loaded_pet)
         assert.are.equal(80, loaded_pet:get_satiety())
-        assert.are.equal(80, loaded_pet:get_happiness())
+        assert.are.equal(80, loaded_pet:get_mood())
         assert.are.equal(pet.birth_time, loaded_pet.birth_time)
     end)
 

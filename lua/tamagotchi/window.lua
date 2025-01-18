@@ -17,7 +17,7 @@ local function build_ui_lines(pet)
 
     local satiety_bar = ascii_bar(pet:get_satiety(), 100, 10)
 
-    local happiness_bar = ascii_bar(pet:get_happiness(), 100, 10)
+    local mood_bar = ascii_bar(pet:get_mood(), 100, 10)
 
     -- You can add more or fewer lines as you like:
     -- We'll pad lines so sprite stays on left, text on right.
@@ -33,8 +33,8 @@ local function build_ui_lines(pet)
     -- Second line: label + satiety bar on the right
     lines[2] = string.format("%-20s  Satiety:    %s", "", satiety_bar)
 
-    -- Third line: label + happiness bar on the right
-    lines[3] = string.format("%-20s  Happiness:  %s", "", happiness_bar)
+    -- Third line: label + mood bar on the right
+    lines[3] = string.format("%-20s  Mood:  %s", "", mood_bar)
 
     return lines
 end
