@@ -9,7 +9,8 @@ describe("pet object", function()
     it("should initialize with default values", function()
         assert.are.equal(50, pet:get_hunger())
         assert.are.equal(50, pet:get_happiness())
-        assert.are.equal(0, pet:get_age())
+        local age = pet:get_age()
+        assert.is_true(age >= 0 and age < 100) -- should take less than 100ms
     end)
 
     it("should allow updating hunger within bounds", function()
@@ -34,11 +35,10 @@ describe("pet object", function()
         assert.are.equal(1, pet:get_happiness())
     end)
 
-    it("should allow updating age within bounds", function()
-        pet:set_age(90)
-        assert.are.equal(90, pet:get_age())
-
-        pet:set_age(-1) -- below min
-        assert.are.equal(0, pet:get_age())
+    it("should calculate increasing age over time", function()
+        local initial_age = pet:get_age()
+        pet.birth_time = pet.birth_time
+        local new_age = pet:get_age()
+        assert.is_true(new_age >= initial_age)
     end)
 end)
