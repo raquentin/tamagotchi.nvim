@@ -1,6 +1,5 @@
 local M = {}
 
--- NOTE: the `native`ness of default pets is asserted in `M.setup`
 M.defaults = {
     keybind = "<leader>tg",
     pets = {
