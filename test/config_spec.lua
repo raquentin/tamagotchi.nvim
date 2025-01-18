@@ -23,8 +23,17 @@ describe("configuration with multiple pets", function()
         assert.is_table(first_pet.sprites)
     end)
 
-    it("should allow user-defined pets to override defaults", function()
+    it("should merge user and native pets, then sort", function()
         local user_pets = {
+            {
+                name = "Spike",
+                sprites = {
+                    happy = { ">:)", ">:-)" },
+                    hungry = { ">:(", ">:'(" },
+                    neutral = { ">:|", ">-_|" },
+                },
+                native = false,
+            },
             {
                 name = "Fluffy",
                 sprites = {
@@ -32,6 +41,20 @@ describe("configuration with multiple pets", function()
                     hungry = { ":(", ":'(" },
                     neutral = { ":|", "-_-" },
                 },
+                native = false,
+            },
+        }
+        config.setup({ pets = user_pets })
+
+        local expected_pets = {
+            {
+                name = "Fluffy",
+                sprites = {
+                    happy = { ":)", ":-D" },
+                    hungry = { ":(", ":'(" },
+                    neutral = { ":|", "-_-" },
+                },
+                native = false,
             },
             {
                 name = "Spike",
@@ -40,13 +63,8 @@ describe("configuration with multiple pets", function()
                     hungry = { ">:(", ">:'(" },
                     neutral = { ">:|", ">-_|" },
                 },
+                native = false,
             },
-        }
-        config.setup({ pets = user_pets })
-
-        -- TODO: not redefine here
-        -- TODO: alphabetize pets everywhere
-        local expected_pets = {
             {
                 name = "Tamagotchi",
                 sprites = {
@@ -54,22 +72,7 @@ describe("configuration with multiple pets", function()
                     hungry = { " >_< ", " (U_U) " },
                     neutral = { " -_- ", " (._.) " },
                 },
-            },
-            {
-                name = "Fluffy",
-                sprites = {
-                    happy = { ":)", ":-D" },
-                    hungry = { ":(", ":'(" },
-                    neutral = { ":|", "-_-" },
-                },
-            },
-            {
-                name = "Spike",
-                sprites = {
-                    happy = { ">:)", ">:-)" },
-                    hungry = { ">:(", ">:'(" },
-                    neutral = { ">:|", ">-_|" },
-                },
+                native = true,
             },
         }
 

@@ -1,5 +1,6 @@
 local M = {}
 
+-- NOTE: the `native`ness of default pets is asserted in `M.setup`
 M.defaults = {
     keybind = "<leader>tg",
     pets = {
@@ -22,18 +23,29 @@ function M.setup(user_config)
     -- start by deep extending default config with user-provided config
     local combined = vim.tbl_deep_extend("force", {}, M.defaults, user_config)
 
-    -- if user provided additional pets, append them to the default list
-    if user_config.pets then
-        local all_pets = {}
-        for _, pet in ipairs(M.defaults.pets) do
-            table.insert(all_pets, pet)
-        end
-        for _, pet in ipairs(user_config.pets) do
-            table.insert(all_pets, pet)
-        end
-        combined.pets = all_pets
+    -- mark default pets as native
+    for _, pet in ipairs(M.defaults.pets) do
+        pet.native = true
     end
 
+    local all_pets = {}
+
+    for _, pet in ipairs(M.defaults.pets) do
+        table.insert(all_pets, pet)
+    end
+
+    -- if user provided pets, mark them as immigrants and append them
+    if user_config.pets then
+        for _, pet in ipairs(user_config.pets) do
+            pet.native = false
+            table.insert(all_pets, pet)
+        end
+    end
+
+    -- sort pets alphabetically by name
+    table.sort(all_pets, function(a, b) return a.name < b.name end)
+
+    combined.pets = all_pets
     M.values = combined
 end
 
