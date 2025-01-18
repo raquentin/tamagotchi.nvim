@@ -4,15 +4,34 @@ Pet.__index = Pet
 function Pet:new(o)
     o = o or {}
     setmetatable(o, Pet)
-    o.hunger = o.hunger or 50
-    o.happiness = o.happiness or 50
+    o.name = o.name or "Anonymous Pet"
+    o.satiety = o.satiety or 80
+    o.happiness = o.happiness or 80
     o.birth_time = vim.loop.now()
+
+    local config = require("tamagotchi.config").values
+
+    -- if no sprites provided, fallback to the first pet's sprites in config, if available.
+    -- TODO: log this
+    if not o.sprites then
+        if config.pets and #config.pets > 0 then
+            local default_pet = config.pets[1]
+            o.sprites = default_pet.sprites
+        else
+            -- as a last resort, initialize empty sprite lists.
+            o.sprites = { happy = {}, hungry = {}, neutral = {} }
+        end
+    end
+
+    o.sprite_indices = { happy = 1, hungry = 1, neutral = 1 }
+    o.last_state = nil
+
     return o
 end
 
-function Pet:get_hunger() return self.hunger end
+function Pet:get_satiety() return self.satiety end
 
-function Pet:set_hunger(value) self.hunger = math.max(1, math.min(100, value)) end
+function Pet:set_satiety(value) self.satiety = math.max(1, math.min(100, value)) end
 
 function Pet:get_happiness() return self.happiness end
 
@@ -26,7 +45,7 @@ function Pet:get_age() return vim.loop.now() - self.birth_time end
 -- convert pet to a plain table for serialization
 function Pet:to_table()
     return {
-        hunger = self.hunger,
+        satiety = self.satiety,
         happiness = self.happiness,
         birth_time = self.birth_time,
     }
@@ -55,4 +74,34 @@ function Pet.load(filepath)
     return Pet:new(data)
 end
 
+local function determine_state(pet)
+    if pet.satiety < 70 then
+        return "hungry"
+    elseif pet.happiness > 70 then
+        return "happy"
+    else
+        return "neutral"
+    end
+end
+
+function Pet:get_sprite()
+    local state = determine_state(self)
+
+    -- reset sprite index if state has changed
+    if not self.last_state or self.last_state ~= state then
+        self.last_state = state
+        self.sprite_indices[state] = 1
+    end
+
+    local sprite_list = self.sprites[state] or {}
+    if #sprite_list == 0 then return "" end
+    -- TODO: log
+
+    local idx = self.sprite_indices[state] or 1
+    local sprite = sprite_list[idx] or sprite_list[1]
+
+    self.sprite_indices[state] = (idx % #sprite_list) + 1
+
+    return sprite
+end
 return Pet
