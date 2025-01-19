@@ -5,43 +5,43 @@ function Pet:new(o)
     o = o or {}
     setmetatable(o, Pet)
 
+    local config = require("tamagotchi.config").values
+
     if not o.name then
         vim.notify("Pet created without a name!", vim.log.levels.WARN)
     end
 
     -- use sprites from global config defaults if not provided
+
     if not o.sprites then
-        local config = require("tamagotchi.config").values
-        vim.notify(
-            "Pet "
-                .. (o.name or "unknown")
-                .. " has no sprites! Using default sprites.",
-            vim.log.levels.WARN
-        )
+        -- Attempt to find sprites based on the pet's name in the config
+        local found = false
+        if o.name then
+            for _, pet_def in ipairs(config.pets or {}) do
+                if pet_def.name == o.name and pet_def.sprites then
+                    o.sprites = pet_def.sprites
+                    found = true
+                    break
+                end
+            end
+        end
 
-        o.sprites = (config.pets and config.pets[1] and config.pets[1].sprites)
-            or { happy = {}, hungry = {}, neutral = {} }
+        -- If sprites are still not found, assign empty tables and warn
+        if not found then
+            vim.notify(
+                "Pet "
+                    .. (o.name or "unknown")
+                    .. " has no sprites and no default sprites found! Using empty sprite sets.",
+                vim.log.levels.WARN
+            )
+            o.sprites = { happy = {}, hungry = {}, neutral = {} }
+        end
     end
-
-    if not o.satiety then
-        vim.notify(
-            "Pet "
-                .. (o.name or "unknown")
-                .. " has no satiety! Setting 50 by default.",
-            vim.log.levels.WARN
-        )
-        o.satiety = 50
-    end
-
-    if not o.mood then
-        vim.notify(
-            "Pet "
-                .. (o.name or "unknown")
-                .. " has no mood! Setting 50 by default.",
-            vim.log.levels.WARN
-        )
-        o.mood = 50
-    end
+    -- setup mood and satiety
+    o.initial_mood = o.initial_mood or config.initial_mood or 80
+    o.initial_satiety = o.initial_satiety or config.initial_satiety or 80
+    o.mood = o.mood or o.initial_mood
+    o.satiety = o.satiety or o.initial_satiety
 
     -- assign non-critical values without warning
     o.tick_length_ms = o.tick_length_ms or 100
@@ -113,8 +113,8 @@ end
 function Pet:to_table()
     return {
         name = self.name,
-        satiety = self.satiety,
         mood = self.mood,
+        satiety = self.satiety,
         birth_time = self.birth_time,
     }
 end

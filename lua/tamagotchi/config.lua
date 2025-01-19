@@ -26,6 +26,11 @@ M.defaults = {
             tick_length_ms = 100,
             sprite_update_interval = 5,
             sprites = kitty_sprites,
+            native = true,
+            mood_decay_probability = 0.02,
+            satiety_decay_probability = 0.02,
+            initial_mood = 80,
+            initial_satiety = 80,
         },
     },
 }
