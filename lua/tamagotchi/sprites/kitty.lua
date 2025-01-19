@@ -1,4 +1,6 @@
 local kitty_sprites = {
+    height = 3,
+    width = 7,
     happy = {
         [[
      /\_/\ 
