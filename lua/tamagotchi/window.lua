@@ -11,9 +11,9 @@ local function ascii_bar(value, max, width)
 end
 
 -- builds the horizontal layout
-local function build_ui_lines(pet, width, height)
+local function build_ui_lines(pet, width, height, sprite_override)
     -- break sprite into lines if applicable
-    local sprite_text = pet:get_sprite() or ""
+    local sprite_text = sprite_override or pet:get_sprite()
     local sprite_lines = {}
     for line in (sprite_text .. "\n"):gmatch("(.-)\n") do
         table.insert(sprite_lines, line)
@@ -22,7 +22,7 @@ local function build_ui_lines(pet, width, height)
     -- build the right div (age, name, attrs)
     local right_lines = {
         ("Name:    %s"):format(pet.name),
-        ("Age:     %.1fs"):format(pet:get_age() / 1000.0),
+        ("Age:     %s"):format(pet:get_age_formatted()),
         ("Satiety: %s"):format(ascii_bar(pet:get_satiety(), 100, 10)),
         ("Mood:    %s"):format(ascii_bar(pet:get_mood(), 100, 10)),
     }
@@ -109,14 +109,22 @@ function M.close()
 end
 
 -- update the buffer lines for the currently open window
-function M.update_ui(pet)
-    if not M.current or not vim.api.nvim_win_is_valid(M.current.win) then
+function M.update_ui(pet, update_sprite)
+    if not (M.current and vim.api.nvim_win_is_valid(M.current.win)) then
         return
     end
     local width = M.current.width
     local height = M.current.height
 
-    local lines = build_ui_lines(pet, width, height)
+    local sprite_text
+    if update_sprite then
+        sprite_text = pet:get_sprite()
+        M.last_sprite = sprite_text
+    else
+        sprite_text = M.last_sprite
+    end
+
+    local lines = build_ui_lines(pet, width, height, sprite_text)
     vim.api.nvim_buf_set_lines(M.current.buf, 0, -1, false, lines)
 end
 
@@ -130,6 +138,11 @@ function M.toggle(pet)
 end
 
 function M.start_refresh_loop(pet)
+    local sprite_interval = pet.sprite_update_interval
+
+    M.sprite_counter = 0
+    M.last_sprite = ""
+
     if M.refresh_timer then
         M.refresh_timer:stop()
         M.refresh_timer:close()
@@ -139,14 +152,20 @@ function M.start_refresh_loop(pet)
     M.refresh_timer = vim.loop.new_timer()
     M.refresh_timer:start(
         0,
-        100,
+        1000,
         vim.schedule_wrap(function()
-            -- TODO: untrivialize this
             pet:update()
+
+            M.sprite_counter = (M.sprite_counter or 0) + 1
+            local update_sprite = false
+            if M.sprite_counter >= sprite_interval then
+                M.sprite_counter = 0
+                update_sprite = true
+            end
 
             -- refresh UI if still open
             if M.current and vim.api.nvim_win_is_valid(M.current.win) then
-                M.update_ui(pet)
+                M.update_ui(pet, update_sprite)
             else
                 -- stop timer if closed
                 M.close()

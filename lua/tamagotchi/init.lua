@@ -42,13 +42,13 @@ function M.setup(user_config)
 
     -- increase mood on file save
     vim.cmd([[
-        autocmd BufWritePost * lua if _G.tamagotchi_pet then _G.tamagotchi_pet:increase_mood(1) end
+        autocmd BufWritePost * lua if _G.tamagotchi_pet then _G.tamagotchi_pet:increase_mood(2) end
     ]])
 
     -- increase satiety on cursor move
-    -- vim.cmd([[
-    --     autocmd CursorMoved * if _G.tamagotchi_pet and &buftype ~= 'nofile' then _G.tamagotchi_pet:increase_satiety(1) end
-    -- ]])
+    vim.cmd([[
+        autocmd TextYankPost * lua if _G.tamagotchi_pet then _G.tamagotchi_pet:increase_satiety(4) end
+    ]])
 
     -- save on leave
     vim.cmd([[

@@ -6,6 +6,7 @@ M.defaults = {
     pets = {
         {
             name = "Tamagotchi",
+            sprite_update_interval = 20,
             sprites = {
                 happy = { " ^_^ ", " (^-^) " },
                 hungry = { " >_< ", " (U_U) " },

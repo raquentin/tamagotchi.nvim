@@ -85,3 +85,63 @@ describe("pet update randomness", function()
         assert.is_true(pet:get_mood() <= initial_mood)
     end)
 end)
+
+describe("pet age formatting", function()
+    local current_time
+
+    before_each(function() current_time = vim.loop.now() end)
+
+    it("formats only seconds when less than a minute has passed", function()
+        local pet = Pet:new({ birth_time = current_time - (30 * 1000) })
+        local formatted = pet:get_age_formatted()
+        assert.are.equal("30sec", formatted)
+    end)
+
+    it(
+        "formats minutes and seconds when less than an hour has passed",
+        function()
+            local pet =
+                Pet:new({ birth_time = current_time - ((2 * 60 + 15) * 1000) })
+            local formatted = pet:get_age_formatted()
+            -- Since hours is 0, it should omit hour part: "2min 15sec"
+            assert.are.equal("2min 15sec", formatted)
+        end
+    )
+
+    it("formats hours, minutes and seconds correctly", function()
+        local pet = Pet:new({ birth_time = current_time - (3661 * 1000) })
+        local formatted = pet:get_age_formatted()
+        assert.are.equal("1hr 1min 1sec", formatted)
+    end)
+
+    it("omits leading zeros for hours if zero", function()
+        local pet =
+            Pet:new({ birth_time = current_time - ((59 * 60 + 30) * 1000) })
+        local formatted = pet:get_age_formatted()
+        assert.are.equal("59min 30sec", formatted)
+    end)
+
+    it("formats days, hours, minutes and seconds correctly", function()
+        local seconds = (1 * 24 * 3600) + (2 * 3600) + (3 * 60) + 4
+        local pet = Pet:new({ birth_time = current_time - (seconds * 1000) })
+        local formatted = pet:get_age_formatted()
+        assert.are.equal("1day 2hr 3min 4sec", formatted)
+    end)
+
+    it("formats years, days, hours, minutes and seconds correctly", function()
+        local seconds = (2 * 365 * 24 * 3600)
+            + (5 * 24 * 3600)
+            + (3 * 3600)
+            + (10 * 60)
+            + 20
+        local pet = Pet:new({ birth_time = current_time - (seconds * 1000) })
+        local formatted = pet:get_age_formatted()
+        assert.are.equal("2yr 5day 3hr 10min 20sec", formatted)
+    end)
+
+    it("omits all larger units if they are zero", function()
+        local pet = Pet:new({ birth_time = current_time })
+        local formatted = pet:get_age_formatted()
+        assert.are.equal("0sec", formatted)
+    end)
+end)

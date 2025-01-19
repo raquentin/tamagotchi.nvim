@@ -27,6 +27,7 @@ describe("configuration with multiple pets", function()
         local user_pets = {
             {
                 name = "Spike",
+                sprite_update_interval = 20,
                 sprites = {
                     happy = { ">:)", ">:-)" },
                     hungry = { ">:(", ">:'(" },
@@ -36,6 +37,7 @@ describe("configuration with multiple pets", function()
             },
             {
                 name = "Fluffy",
+                sprite_update_interval = 20,
                 sprites = {
                     happy = { ":)", ":-D" },
                     hungry = { ":(", ":'(" },
@@ -49,6 +51,7 @@ describe("configuration with multiple pets", function()
         local expected_pets = {
             {
                 name = "Fluffy",
+                sprite_update_interval = 20,
                 sprites = {
                     happy = { ":)", ":-D" },
                     hungry = { ":(", ":'(" },
@@ -58,6 +61,7 @@ describe("configuration with multiple pets", function()
             },
             {
                 name = "Spike",
+                sprite_update_interval = 20,
                 sprites = {
                     happy = { ">:)", ">:-)" },
                     hungry = { ">:(", ">:'(" },
@@ -67,6 +71,7 @@ describe("configuration with multiple pets", function()
             },
             {
                 name = "Tamagotchi",
+                sprite_update_interval = 20,
                 sprites = {
                     happy = { " ^_^ ", " (^-^) " },
                     hungry = { " >_< ", " (U_U) " },

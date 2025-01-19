@@ -26,6 +26,8 @@ function Pet:new(o)
     o.sprite_indices = { happy = 1, hungry = 1, neutral = 1 }
     o.last_state = nil
 
+    o.sprite_update_interval = o.sprite_update_interval or 5
+
     return o
 end
 
@@ -45,7 +47,44 @@ function Pet:get_mood() return self.mood end
 
 function Pet:set_mood(value) self.mood = math.max(1, math.min(100, value)) end
 
-function Pet:get_age() return vim.loop.now() - self.birth_time end
+function Pet:get_age() return ((vim.loop.now() - self.birth_time) / 1000) end
+
+function Pet:get_age_formatted()
+    local elapsed = math.floor(self:get_age())
+
+    local years = math.floor(elapsed / (365 * 24 * 3600))
+    elapsed = elapsed - years * 365 * 24 * 3600
+    local days = math.floor(elapsed / (24 * 3600))
+    elapsed = elapsed - days * 24 * 3600
+    local hours = math.floor(elapsed / 3600)
+    elapsed = elapsed - hours * 3600
+    local minutes = math.floor(elapsed / 60)
+    local seconds = elapsed - minutes * 60
+
+    local parts = {}
+    local started = false
+
+    if years > 0 then
+        started = true
+        table.insert(parts, years .. "yr")
+    end
+    if started or days > 0 then
+        started = true
+        table.insert(parts, days .. "day")
+    end
+    if started or hours > 0 then
+        started = true
+        table.insert(parts, hours .. "hr")
+    end
+    if started or minutes > 0 then
+        started = true
+        table.insert(parts, minutes .. "min")
+    end
+
+    table.insert(parts, seconds .. "sec")
+
+    return table.concat(parts, " ")
+end
 
 -- convert pet to a plain table for serialization
 function Pet:to_table()
@@ -63,7 +102,7 @@ end
 
 -- decrement satiety and mood
 function Pet:update()
-    local decrement_chance = 0.01 -- 1% chance to decrement on a given tick
+    local decrement_chance = 0.02 -- 2% chance to decrement on a given tick
     if math.random() < decrement_chance then
         self:set_satiety(math.max(1, self.satiety - 1))
     end
