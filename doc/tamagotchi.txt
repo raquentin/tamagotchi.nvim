@@ -5,6 +5,10 @@ Table of Contents                               *tamagotchi-table-of-contents*
 
 1. 🐱 tamagotchi.nvim                      |tamagotchi-🐱-tamagotchi.nvim|
   - Features                        |tamagotchi-🐱-tamagotchi.nvim-features|
+  - Installation                |tamagotchi-🐱-tamagotchi.nvim-installation|
+  - Configuration              |tamagotchi-🐱-tamagotchi.nvim-configuration|
+  - Screenshot                    |tamagotchi-🐱-tamagotchi.nvim-screenshot|
+  - Contributing                |tamagotchi-🐱-tamagotchi.nvim-contributing|
 2. Links                                                    |tamagotchi-links|
 
 ==============================================================================
@@ -20,6 +24,74 @@ FEATURES                            *tamagotchi-🐱-tamagotchi.nvim-features*
 - Multiple Pets: Manage a list of pets, select different ones from a menu, view more info, and reset as needed.
 - Persistent State: Your pet’s mood and satiety persist across Neovim sessions.
 - Extensible Tabs: A bottom bar that you can configure to open menus, display info, and perform actions like reset.
+
+
+INSTALLATION                    *tamagotchi-🐱-tamagotchi.nvim-installation*
+
+
+VIM-PLUG
+
+>vim
+    Plug "raquentin/tamagotchi.nvim"
+<
+
+
+PACKER.NVIM
+
+>lua
+    use { "raquentin/tamagotchi.nvim", }
+<
+
+
+LAZY.NVIM
+
+>lua
+    { "raquentin/tamagotchi.nvim", }
+<
+
+
+CONFIGURATION                  *tamagotchi-🐱-tamagotchi.nvim-configuration*
+
+>lua
+    require('tamagotchi').setup({
+      keybind = "<leader>tg", -- toggles tamagotchi window
+      tick_length_ms = 100, -- defines window refresh rate
+      mood_decay_probability = 0.02, -- probability of mood decreasing by 1 on a given tick
+      satiety_decay_probability = 0.02, -- probability of satiety decreasing by 1 on a given tick
+      vim_events = {
+        -- listen to buffer writes and update mood accordingly
+        { name = "BufWritePost", mood_increment = 5, satiety_increment = 0 },
+        -- listen to text yanks and update satiety accordingly
+        { name = "TextYankPost", mood_increment = 0, satiety_increment = 2 },
+      },
+      default_pet = "Mitchell",
+      pets = {
+        {
+          name = "Mitchell",
+          initial_mood = 80, -- mood the pet is born with
+          initial_satiety = 80, -- satiety the pet is born with
+          sprite_update_interval = 5, -- only loop through the sprites every `n` ticks
+          sprites = {
+            happy = { " ^_^ ", " (^-^) " },
+            hungry = { " >_< ", " (U_U) " },
+            neutral = { " -_- ", " (._.) " },
+          },
+        },
+        -- additional pet definitions...
+      },
+    })
+<
+
+
+SCREENSHOT                        *tamagotchi-🐱-tamagotchi.nvim-screenshot*
+
+
+CONTRIBUTING                    *tamagotchi-🐱-tamagotchi.nvim-contributing*
+
+Submit issues and PRs as you please.
+
+If you have a more general question, start a discussion
+<https://github.com/raquentin/tamagotchi.nvim/discussions>.
 
 ==============================================================================
 2. Links                                                    *tamagotchi-links*
