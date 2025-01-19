@@ -2,6 +2,9 @@
 
 A configurable plugin for raising pets across Neovim sessions.
 
+> [!WARNING]  
+> This project is days old. The `.setup({` API will change often.
+
 ## Features
 - Floating Window UI: Displays your pet with sprite animations, stats, and a colored bottom bar with interactive tabs.
 - Customizable Behavior: Configure tick length, decay probabilities, and Vim events that affect your pet's mood and satiety.
