@@ -4,33 +4,56 @@ Pet.__index = Pet
 function Pet:new(o)
     o = o or {}
     setmetatable(o, Pet)
-    o.name = o.name
-    o.satiety = o.satiety or 80
-    o.mood = o.mood or 80
-    o.birth_time = o.birth_time or vim.loop.now()
 
-    local config = require("tamagotchi.config").values
-
-    -- if no sprites provided, fallback to the first pet's sprites in config, if available.
-    -- TODO: log this
-    if not o.sprites then
-        if config.pets and #config.pets > 0 then
-            local default_pet = config.pets[1]
-            o.sprites = default_pet.sprites
-        else
-            -- as a last resort, initialize empty sprite lists.
-            o.sprites = { happy = {}, hungry = {}, neutral = {} }
-        end
+    if not o.name then
+        vim.notify("Pet created without a name!", vim.log.levels.WARN)
     end
 
+    -- use sprites from global config defaults if not provided
+    if not o.sprites then
+        local config = require("tamagotchi.config").values
+        vim.notify(
+            "Pet "
+                .. (o.name or "unknown")
+                .. " has no sprites! Using default sprites.",
+            vim.log.levels.WARN
+        )
+
+        o.sprites = (config.pets and config.pets[1] and config.pets[1].sprites)
+            or { happy = {}, hungry = {}, neutral = {} }
+    end
+
+    if not o.satiety then
+        vim.notify(
+            "Pet "
+                .. (o.name or "unknown")
+                .. " has no satiety! Setting 50 by default.",
+            vim.log.levels.WARN
+        )
+        o.satiety = 50
+    end
+
+    if not o.mood then
+        vim.notify(
+            "Pet "
+                .. (o.name or "unknown")
+                .. " has no mood! Setting 50 by default.",
+            vim.log.levels.WARN
+        )
+        o.mood = 50
+    end
+
+    -- assign non-critical values without warning
+    o.tick_length_ms = o.tick_length_ms or 100
+    o.sprite_update_interval = o.sprite_update_interval or 5
+    o.birth_time = o.birth_time or vim.loop.now()
+
+    -- state variables for rendering
     o.sprite_indices = { happy = 1, hungry = 1, neutral = 1 }
     o.last_state = nil
 
-    o.sprite_update_interval = o.sprite_update_interval or 5
-
     return o
 end
-
 ------------------------------------------------------------------------
 -- get / set
 ------------------------------------------------------------------------
@@ -102,12 +125,16 @@ end
 
 -- decrement satiety and mood
 function Pet:update()
-    local decrement_chance = 0.02 -- 2% chance to decrement on a given tick
-    if math.random() < decrement_chance then
-        self:set_satiety(math.max(1, self.satiety - 1))
-    end
-    if math.random() < decrement_chance then
+    -- grap decay probabilities from config
+    local mood_d_p = require("tamagotchi.config").values.mood_decay_probability
+    local satiety_d_p =
+        require("tamagotchi.config").values.mood_decay_probability
+
+    if math.random() < mood_d_p then
         self:set_mood(math.max(1, self.mood - 1))
+    end
+    if math.random() < satiety_d_p then
+        self:set_satiety(math.max(1, self.satiety - 1))
     end
 end
 

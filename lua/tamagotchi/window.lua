@@ -149,10 +149,12 @@ function M.start_refresh_loop(pet)
         M.refresh_timer = nil
     end
 
+    local config = require("tamagotchi.config").values
+
     M.refresh_timer = vim.loop.new_timer()
     M.refresh_timer:start(
         0,
-        100,
+        config.tick_length_ms,
         vim.schedule_wrap(function()
             pet:update()
 

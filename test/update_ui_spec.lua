@@ -11,7 +11,8 @@ describe("update_ui with sprite flag", function()
             pets = {
                 {
                     name = "TestPet",
-                    sprite_update_interval = 20,
+                    tick_length_ms = 100,
+                    sprite_update_interval = 5,
                     sprites = {
                         happy = { ":)", ":-D" },
                         hungry = { ":(" },

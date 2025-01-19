@@ -1,10 +1,13 @@
 local Pet = require("tamagotchi.pet")
+local config = require("tamagotchi.config")
 local assert = require("luassert")
 
-describe("pet object", function()
+describe("pet initialization", function()
     local pet
-
-    before_each(function() pet = Pet:new() end)
+    before_each(function()
+        config.setup() -- Initialize configuration with defaults
+        pet = Pet:new({ satiety = 80, mood = 80 })
+    end)
 
     it("should initialize with default values", function()
         assert.are.equal(80, pet:get_satiety())
@@ -12,6 +15,12 @@ describe("pet object", function()
         local age = pet:get_age()
         assert.is_true(age >= 0 and age < 100) -- should take less than 100ms
     end)
+end)
+
+describe("pet object", function()
+    local pet
+
+    before_each(function() pet = Pet:new() end)
 
     it("should allow updating satiety within bounds", function()
         pet:set_satiety(80)
@@ -73,6 +82,9 @@ end)
 describe("pet update randomness", function()
     local pet
     before_each(function()
+        -- Initialize configuration with defaults
+        config.setup()
+
         math.randomseed(123)
         pet = Pet:new({ satiety = 80, mood = 80 })
     end)
@@ -85,7 +97,6 @@ describe("pet update randomness", function()
         assert.is_true(pet:get_mood() <= initial_mood)
     end)
 end)
-
 describe("pet age formatting", function()
     local current_time
 

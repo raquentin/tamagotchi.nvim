@@ -40,15 +40,17 @@ function M.setup(user_config)
         { noremap = true, silent = true }
     )
 
-    -- increase mood on file save
-    vim.cmd([[
-        autocmd BufWritePost * lua if _G.tamagotchi_pet then _G.tamagotchi_pet:increase_mood(2) end
-    ]])
-
-    -- increase satiety on cursor move
-    vim.cmd([[
-        autocmd TextYankPost * lua if _G.tamagotchi_pet then _G.tamagotchi_pet:increase_satiety(4) end
-    ]])
+    -- link vim events to event handlers
+    for _, evt_def in ipairs(config.values.vim_events) do
+        local cmd = string.format(
+            [[autocmd %s * lua require("tamagotchi.event_handler").on_event("%s", %d, %d)]],
+            evt_def.name,
+            evt_def.name,
+            evt_def.mood_increment,
+            evt_def.satiety_increment
+        )
+        vim.cmd(cmd)
+    end
 
     -- save on leave
     vim.cmd([[

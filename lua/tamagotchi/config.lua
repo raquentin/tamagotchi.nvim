@@ -1,17 +1,31 @@
+local kitty_sprites = require("tamagotchi.sprites.kitty")
+
 local M = {}
 
 M.defaults = {
     keybind = "<leader>tg",
-    default_pet = "Tamagotchi",
+    tick_length_ms = 100,
+    mood_decay_probability = 0.02,
+    satiety_decay_probability = 0.02,
+    vim_events = {
+        {
+            name = "BufWritePost",
+            mood_increment = 5,
+            satiety_increment = 0,
+        },
+        {
+            name = "TextYankPost",
+            mood_increment = 0,
+            satiety_increment = 2,
+        },
+    },
+    default_pet = "Kitty",
     pets = {
         {
-            name = "Tamagotchi",
-            sprite_update_interval = 20,
-            sprites = {
-                happy = { " ^_^ ", " (^-^) " },
-                hungry = { " >_< ", " (U_U) " },
-                neutral = { " -_- ", " (._.) " },
-            },
+            name = "Kitty",
+            tick_length_ms = 100,
+            sprite_update_interval = 5,
+            sprites = kitty_sprites,
         },
     },
 }
@@ -28,6 +42,11 @@ function M.setup(user_config)
     for _, pet in ipairs(M.defaults.pets) do
         pet.native = true
     end
+
+    assert(
+        M.defaults.pets,
+        "M.defaults.pets is nil. Ensure pets are defined in defaults."
+    )
 
     local all_pets = {}
 

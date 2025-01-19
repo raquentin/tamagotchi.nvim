@@ -1,5 +1,6 @@
 local config = require("tamagotchi.config")
 local assert = require("luassert")
+local kitty_sprites = require("tamagotchi.sprites.kitty")
 
 describe("keybind configuration", function()
     it("should use default config when no user config is provided", function()
@@ -19,7 +20,7 @@ describe("configuration with multiple pets", function()
         assert.is_table(config.values.pets)
         assert.is_true(#config.values.pets >= 1)
         local first_pet = config.values.pets[1]
-        assert.are.equal("Tamagotchi", first_pet.name)
+        assert.are.equal("Kitty", first_pet.name)
         assert.is_table(first_pet.sprites)
     end)
 
@@ -27,7 +28,8 @@ describe("configuration with multiple pets", function()
         local user_pets = {
             {
                 name = "Spike",
-                sprite_update_interval = 20,
+                tick_length_ms = 100,
+                sprite_update_interval = 5,
                 sprites = {
                     happy = { ">:)", ">:-)" },
                     hungry = { ">:(", ">:'(" },
@@ -37,7 +39,8 @@ describe("configuration with multiple pets", function()
             },
             {
                 name = "Fluffy",
-                sprite_update_interval = 20,
+                tick_length_ms = 100,
+                sprite_update_interval = 5,
                 sprites = {
                     happy = { ":)", ":-D" },
                     hungry = { ":(", ":'(" },
@@ -51,7 +54,8 @@ describe("configuration with multiple pets", function()
         local expected_pets = {
             {
                 name = "Fluffy",
-                sprite_update_interval = 20,
+                tick_length_ms = 100,
+                sprite_update_interval = 5,
                 sprites = {
                     happy = { ":)", ":-D" },
                     hungry = { ":(", ":'(" },
@@ -60,24 +64,22 @@ describe("configuration with multiple pets", function()
                 native = false,
             },
             {
+                name = "Kitty",
+                tick_length_ms = 100,
+                sprite_update_interval = 5,
+                sprites = kitty_sprites,
+                native = true,
+            },
+            {
                 name = "Spike",
-                sprite_update_interval = 20,
+                tick_length_ms = 100,
+                sprite_update_interval = 5,
                 sprites = {
                     happy = { ">:)", ">:-)" },
                     hungry = { ">:(", ">:'(" },
                     neutral = { ">:|", ">-_|" },
                 },
                 native = false,
-            },
-            {
-                name = "Tamagotchi",
-                sprite_update_interval = 20,
-                sprites = {
-                    happy = { " ^_^ ", " (^-^) " },
-                    hungry = { " >_< ", " (U_U) " },
-                    neutral = { " -_- ", " (._.) " },
-                },
-                native = true,
             },
         }
 
