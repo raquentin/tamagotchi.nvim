@@ -47,6 +47,8 @@ function Pet:new(o)
     o.tick_length_ms = o.tick_length_ms or 100
     o.sprite_update_interval = o.sprite_update_interval or 5
     o.birth_time = o.birth_time or vim.loop.now()
+    o.mood_decay_probability = o.mood_decay_probability or 0.02
+    o.satiety_decay_probability = o.satiety_decay_probability or 0.02
 
     -- state variables for rendering
     o.sprite_indices = { happy = 1, hungry = 1, neutral = 1 }
@@ -111,12 +113,11 @@ end
 
 -- convert pet to a plain table for serialization
 function Pet:to_table()
-    return {
-        name = self.name,
-        mood = self.mood,
-        satiety = self.satiety,
-        birth_time = self.birth_time,
-    }
+    local t = {}
+    for key, value in pairs(self) do
+        t[key] = value
+    end
+    return t
 end
 
 ------------------------------------------------------------------------
@@ -125,15 +126,10 @@ end
 
 -- decrement satiety and mood
 function Pet:update()
-    -- grap decay probabilities from config
-    local mood_d_p = require("tamagotchi.config").values.mood_decay_probability
-    local satiety_d_p =
-        require("tamagotchi.config").values.mood_decay_probability
-
-    if math.random() < mood_d_p then
+    if math.random() < self.mood_decay_probability then
         self:set_mood(math.max(1, self.mood - 1))
     end
-    if math.random() < satiety_d_p then
+    if math.random() < self.satiety_decay_probability then
         self:set_satiety(math.max(1, self.satiety - 1))
     end
 end

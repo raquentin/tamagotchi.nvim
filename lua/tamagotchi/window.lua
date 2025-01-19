@@ -148,7 +148,7 @@ end
 -- create the floating window (a scratch buffer)
 local function create_floating_window()
     local width = math.floor(vim.o.columns * 0.4)
-    local height = math.floor(vim.o.lines * 0.25)
+    local height = 7
     local row = math.floor((vim.o.lines - height) / 2)
     local col = math.floor((vim.o.columns - width) / 2)
 

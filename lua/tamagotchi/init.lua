@@ -35,13 +35,13 @@ function M.setup(user_config)
 
     vim.api.nvim_set_keymap(
         "n",
-        config.values.keybind,
+        config.values.window_toggle_keybind,
         '<cmd>lua require("tamagotchi.window").toggle(_G.tamagotchi_pet)<CR>',
         { noremap = true, silent = true }
     )
 
     -- link vim events to event handlers
-    for _, evt_def in ipairs(config.values.vim_events) do
+    for _, evt_def in ipairs(_G.tamagotchi_pet.vim_events) do
         local cmd = string.format(
             [[autocmd %s * lua require("tamagotchi.event_handler").on_event("%s", %d, %d)]],
             evt_def.name,

@@ -27,7 +27,7 @@ describe("pet constructor", function()
         "assigns sprites based on pet name without warning when sprites are defined",
         function()
             -- create a pet with a name that has sprites defined in config
-            local pet = Pet:new({ name = "Kitty" })
+            local pet = Pet:new({ name = "Ilya" })
 
             -- check that sprites are correctly assigned
             assert.is_not_nil(pet.sprites)
@@ -137,7 +137,7 @@ describe("pet update randomness", function()
         config.setup()
 
         math.randomseed(123)
-        pet = Pet:new({ satiety = 80, mood = 80 })
+        pet = Pet:new()
     end)
 
     it("should not increase attributes during update", function()
