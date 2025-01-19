@@ -152,7 +152,7 @@ function M.start_refresh_loop(pet)
     M.refresh_timer = vim.loop.new_timer()
     M.refresh_timer:start(
         0,
-        1000,
+        100,
         vim.schedule_wrap(function()
             pet:update()
 
