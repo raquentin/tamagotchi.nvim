@@ -17,6 +17,57 @@ describe("pet initialization", function()
     end)
 end)
 
+describe("pet constructor", function()
+    before_each(function()
+        -- initialize configuration with default pets
+        config.setup()
+    end)
+
+    it(
+        "assigns sprites based on pet name without warning when sprites are defined",
+        function()
+            -- create a pet with a name that has sprites defined in config
+            local pet = Pet:new({ name = "Kitty" })
+
+            -- check that sprites are correctly assigned
+            assert.is_not_nil(pet.sprites)
+            assert.is_table(pet.sprites.happy)
+            assert.are.equal(2, #pet.sprites.happy)
+        end
+    )
+
+    it(
+        "assigns empty sprites and warns when pet name has no sprites defined",
+        function()
+            -- capture the original vim.notify function
+            local original_notify = vim.notify
+            local notify_messages = {}
+            vim.notify = function(msg, level)
+                table.insert(notify_messages, { msg = msg, level = level })
+            end
+
+            -- create a pet with a name that has no sprites defined in config
+            local pet = Pet:new({ name = "UnknownPet" })
+
+            -- check that sprites are empty
+            assert.is_table(pet.sprites)
+            assert.are.equal(0, #pet.sprites.happy)
+            assert.are.equal(0, #pet.sprites.hungry)
+            assert.are.equal(0, #pet.sprites.neutral)
+
+            assert.are.equal(1, #notify_messages)
+            assert.are.equal(
+                "Pet UnknownPet has no sprites and no default sprites found! Using empty sprite sets.",
+                notify_messages[1].msg
+            )
+            assert.are.equal(vim.log.levels.WARN, notify_messages[1].level)
+
+            -- restore the original vim.notify function
+            vim.notify = original_notify
+        end
+    )
+end)
+
 describe("pet object", function()
     local pet
 
