@@ -5,7 +5,7 @@ M.current = nil
 M.refresh_timer = nil
 
 local function ascii_bar(value, max, width)
-    local filled = math.floor((value / max) * width)
+    local filled = math.floor((value / max) * width) + 1
     local unfilled = width - filled
     return "[" .. string.rep("#", filled) .. string.rep("-", unfilled) .. "]"
 end
@@ -148,7 +148,7 @@ end
 -- create the floating window (a scratch buffer)
 local function create_floating_window()
     local width = math.floor(vim.o.columns * 0.4)
-    local height = math.floor(vim.o.lines * 0.25)
+    local height = 7
     local row = math.floor((vim.o.lines - height) / 2)
     local col = math.floor((vim.o.columns - width) / 2)
 
@@ -175,6 +175,18 @@ function M.open(pet)
         return nil
     end
 
+    local config = require("tamagotchi.config").values
+
+    -- apply retroactive decay
+    local time_elapsed = vim.loop.now() - pet.last_vim_close_time
+    local ticks_since = time_elapsed / config.tick_length_ms
+    local ticks_with_decay_mood = ticks_since * pet.mood_decay_probability
+    local mood_subtrahend = ticks_with_decay_mood * 1 -- todo: parameterize 1
+    local ticks_with_decay_satiety = ticks_since * pet.satiety_decay_probability
+    local satiety_subtrahend = ticks_with_decay_satiety * 1 -- todo: parameterize 1
+    pet:set_mood(pet:get_mood() - mood_subtrahend)
+    pet:set_satiety(pet:get_satiety() - satiety_subtrahend)
+
     -- close open window if exists
     if M.current and vim.api.nvim_win_is_valid(M.current.win) then
         vim.api.nvim_win_close(M.current.win, true)
@@ -184,17 +196,18 @@ function M.open(pet)
     M.current = create_floating_window()
 
     M.update_ui(pet, true)
-
     M.start_refresh_loop(pet)
     return M.current
 end
 
-function M.close()
+function M.close(pet)
     if M.refresh_timer then
         M.refresh_timer:stop()
         M.refresh_timer:close()
         M.refresh_timer = nil
     end
+
+    pet:save_on_window_close()
 
     if M.current and vim.api.nvim_win_is_valid(M.current.win) then
         vim.api.nvim_win_close(M.current.win, true)
@@ -224,7 +237,7 @@ end
 
 function M.toggle(pet)
     if M.current and vim.api.nvim_win_is_valid(M.current.win) then
-        M.close()
+        M.close(pet)
         return nil
     else
         return M.open(pet)
@@ -246,11 +259,14 @@ function M.start_refresh_loop(pet)
 
     local config = require("tamagotchi.config").values
 
+    local i = 0
+
     M.refresh_timer = vim.loop.new_timer()
     M.refresh_timer:start(
         0,
         config.tick_length_ms,
         vim.schedule_wrap(function()
+            i = i + 1
             pet:update()
 
             M.sprite_counter = (M.sprite_counter or 0) + 1
@@ -265,7 +281,7 @@ function M.start_refresh_loop(pet)
                 M.update_ui(pet, update_sprite)
             else
                 -- stop timer if closed
-                M.close()
+                M.close(pet)
             end
         end)
     )

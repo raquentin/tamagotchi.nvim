@@ -1,6 +1,17 @@
 local Pet = {}
 Pet.__index = Pet
 
+-- map of "decay classes" -> probabilities (0 is none, 5 is intense)
+local DECAY_CLASSES = {
+    [0] = { mood = 0.0, satiety = 0.0 },
+    [1] = { mood = 0.0005, satiety = 0.0005 },
+    [2] = { mood = 0.001, satiety = 0.001 },
+    [3] = { mood = 0.005, satiety = 0.005 },
+    [4] = { mood = 0.01, satiety = 0.01 },
+    [5] = { mood = 0.02, satiety = 0.02 },
+    [6] = { mood = 0.08, satiety = 0.08 },
+}
+
 function Pet:new(o)
     o = o or {}
     setmetatable(o, Pet)
@@ -8,7 +19,7 @@ function Pet:new(o)
     local config = require("tamagotchi.config").values
 
     if not o.name then
-        vim.notify("Pet created without a name!", vim.log.levels.WARN)
+        vim.notify("Pet created without a name!", vim.log.levels.DEBUG)
     end
 
     -- use sprites from global config defaults if not provided
@@ -32,7 +43,7 @@ function Pet:new(o)
                 "Pet "
                     .. (o.name or "unknown")
                     .. " has no sprites and no default sprites found! Using empty sprite sets.",
-                vim.log.levels.WARN
+                vim.log.levels.DEBUG
             )
             o.sprites = { happy = {}, hungry = {}, neutral = {} }
         end
@@ -48,9 +59,19 @@ function Pet:new(o)
     o.sprite_update_interval = o.sprite_update_interval or 5
     o.birth_time = o.birth_time or vim.loop.now()
 
+    -- load decay probabilities from delay class
+    o.decay_speed = (o.decay_speed ~= nil) and o.decay_speed or 3
+    local class_vals = DECAY_CLASSES[o.decay_speed] or DECAY_CLASSES[3]
+    o.mood_decay_probability = class_vals.mood
+    o.satiety_decay_probability = class_vals.satiety
+
     -- state variables for rendering
     o.sprite_indices = { happy = 1, hungry = 1, neutral = 1 }
     o.last_state = nil
+
+    -- for use in calulating retroactive decay
+    o.last_vim_close_time = o.last_vim_close_time or vim.loop.now()
+    o.last_window_close_time = o.last_window_close_time or vim.loop.now()
 
     return o
 end
@@ -111,12 +132,11 @@ end
 
 -- convert pet to a plain table for serialization
 function Pet:to_table()
-    return {
-        name = self.name,
-        mood = self.mood,
-        satiety = self.satiety,
-        birth_time = self.birth_time,
-    }
+    local t = {}
+    for key, value in pairs(self) do
+        t[key] = value
+    end
+    return t
 end
 
 ------------------------------------------------------------------------
@@ -125,16 +145,12 @@ end
 
 -- decrement satiety and mood
 function Pet:update()
-    -- grap decay probabilities from config
-    local mood_d_p = require("tamagotchi.config").values.mood_decay_probability
-    local satiety_d_p =
-        require("tamagotchi.config").values.mood_decay_probability
-
-    if math.random() < mood_d_p then
-        self:set_mood(math.max(1, self.mood - 1))
+    local rand = math.random()
+    if rand < self.mood_decay_probability then
+        self:set_mood(math.max(10, self.mood - 1))
     end
-    if math.random() < satiety_d_p then
-        self:set_satiety(math.max(1, self.satiety - 1))
+    if rand > 1 - self.satiety_decay_probability then
+        self:set_satiety(math.max(10, self.satiety - 1))
     end
 end
 
@@ -185,8 +201,20 @@ end
 -- persistence
 ------------------------------------------------------------------------
 
--- save pet state to a file (default path in Neovim data directory)
-function Pet:save(filepath)
+-- save pet long term, between vim sessions
+function Pet:save_on_vim_close(filepath)
+    self.last_vim_close_time = vim.loop.now()
+    self:store(filepath)
+end
+
+-- save pet short term, between tamagotchi.nvim window toggles
+function Pet:save_on_window_close(filepath)
+    self.last_window_close_time = vim.loop.now()
+    self:store(filepath)
+end
+
+-- store pet state at filepath (default path in Neovim data directory)
+function Pet:store(filepath)
     filepath = filepath or (vim.fn.stdpath("data") .. "/tamagotchi.json")
 
     -- ensure dir exists
@@ -198,7 +226,7 @@ function Pet:save(filepath)
 end
 
 -- load pet state from a file, returns a new Pet or nil if file does not exist
-function Pet.load(filepath)
+function Pet.load_on_vim_open(filepath)
     filepath = filepath or (vim.fn.stdpath("data") .. "/tamagotchi.json")
 
     if vim.fn.filereadable(filepath) == 0 then return nil end
@@ -210,7 +238,21 @@ function Pet.load(filepath)
     local status, data = pcall(vim.fn.json_decode, content)
     if not status or type(data) ~= "table" then return nil end
 
-    return Pet:new(data)
+    local pet = Pet:new(data)
+
+    -- apply retroactive decay based on last_save_time
+    local elapsed_time = (vim.loop.now() - pet.last_vim_close_time) / 1000
+
+    -- apply logarithmic decay
+    local mood_decay = pet.mood_decay_probability * math.log(1 + elapsed_time)
+    local satiety_decay = pet.satiety_decay_probability
+        * math.log(1 + elapsed_time)
+
+    -- lower bound to 10 so its not just dead on load
+    pet.mood = math.max(10, pet.mood - mood_decay)
+    pet.satiety = math.max(10, pet.satiety - satiety_decay)
+
+    return pet
 end
 
 return Pet

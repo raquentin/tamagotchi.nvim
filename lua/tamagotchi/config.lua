@@ -1,36 +1,59 @@
 local kitty_sprites = require("tamagotchi.sprites.kitty")
+local lucy_sprites = require("tamagotchi.sprites.lucy")
 
 local M = {}
 
 M.defaults = {
-    keybind = "<leader>tg",
+    window_toggle_keybind = "<leader>tg",
     tick_length_ms = 100,
-    mood_decay_probability = 0.02,
-    satiety_decay_probability = 0.02,
-    vim_events = {
-        {
-            name = "BufWritePost",
-            mood_increment = 5,
-            satiety_increment = 0,
-        },
-        {
-            name = "TextYankPost",
-            mood_increment = 0,
-            satiety_increment = 2,
-        },
-    },
-    default_pet = "Kitty",
+    default_pet = "Lucy",
     pets = {
         {
-            name = "Kitty",
-            tick_length_ms = 100,
+            name = "Ilya",
+
             sprite_update_interval = 5,
             sprites = kitty_sprites,
-            native = true,
-            mood_decay_probability = 0.02,
-            satiety_decay_probability = 0.02,
-            initial_mood = 80,
-            initial_satiety = 80,
+
+            initial_mood = 95,
+            initial_satiety = 95,
+            decay_speed = 3,
+
+            vim_events = {
+                {
+                    name = "BufWritePost",
+                    mood_increment = 22,
+                    satiety_increment = 2,
+                },
+                {
+                    name = "TextYankPost",
+                    mood_increment = 0,
+                    satiety_increment = 13,
+                },
+            },
+        },
+
+        {
+            name = "Lucy",
+
+            sprite_update_interval = 6,
+            sprites = lucy_sprites,
+
+            initial_mood = 95,
+            initial_satiety = 95,
+            decay_speed = 4,
+
+            vim_events = {
+                {
+                    name = "BufWritePost",
+                    mood_increment = 1,
+                    satiety_increment = 29,
+                },
+                {
+                    name = "TextYankPost",
+                    mood_increment = 8,
+                    satiety_increment = 0,
+                },
+            },
         },
     },
 }

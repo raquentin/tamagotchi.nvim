@@ -8,7 +8,7 @@ function M.setup(user_config)
 
     local Pet = require("tamagotchi.pet")
 
-    local loaded_pet = Pet.load()
+    local loaded_pet = Pet.load_on_vim_open()
     if loaded_pet then
         _G.tamagotchi_pet = loaded_pet
     else
@@ -35,13 +35,13 @@ function M.setup(user_config)
 
     vim.api.nvim_set_keymap(
         "n",
-        config.values.keybind,
+        config.values.window_toggle_keybind,
         '<cmd>lua require("tamagotchi.window").toggle(_G.tamagotchi_pet)<CR>',
         { noremap = true, silent = true }
     )
 
     -- link vim events to event handlers
-    for _, evt_def in ipairs(config.values.vim_events) do
+    for _, evt_def in ipairs(_G.tamagotchi_pet.vim_events) do
         local cmd = string.format(
             [[autocmd %s * lua require("tamagotchi.event_handler").on_event("%s", %d, %d)]],
             evt_def.name,
@@ -54,7 +54,7 @@ function M.setup(user_config)
 
     -- save on leave
     vim.cmd([[
-        autocmd VimLeavePre * lua if _G.tamagotchi_pet then _G.tamagotchi_pet:save() end
+        autocmd VimLeavePre * lua if _G.tamagotchi_pet then _G.tamagotchi_pet:save_on_vim_close() end
     ]])
 
     window.start_refresh_loop(_G.tamagotchi_pet)
