@@ -16,7 +16,7 @@ M.defaults = {
 
             initial_mood = 95,
             initial_satiety = 95,
-            decay_class = 3,
+            decay_speed = 3,
 
             vim_events = {
                 {
@@ -40,7 +40,7 @@ M.defaults = {
 
             initial_mood = 95,
             initial_satiety = 95,
-            decay_class = 4,
+            decay_speed = 4,
 
             vim_events = {
                 {
