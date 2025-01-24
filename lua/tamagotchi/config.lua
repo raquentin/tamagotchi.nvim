@@ -1,30 +1,57 @@
 local kitty_sprites = require("tamagotchi.sprites.kitty")
+local lucy_sprites = require("tamagotchi.sprites.lucy")
 
 local M = {}
 
 M.defaults = {
     window_toggle_keybind = "<leader>tg",
     tick_length_ms = 100,
-    default_pet = "Ilya",
+    default_pet = "Lucy",
     pets = {
         {
             name = "Ilya",
+
             sprite_update_interval = 5,
             sprites = kitty_sprites,
-            mood_decay_probability = 0.02,
-            satiety_decay_probability = 0.02,
-            initial_mood = 80,
-            initial_satiety = 80,
+
+            initial_mood = 95,
+            initial_satiety = 95,
+            decay_class = 3,
+
             vim_events = {
                 {
                     name = "BufWritePost",
-                    mood_increment = 5,
-                    satiety_increment = 0,
+                    mood_increment = 22,
+                    satiety_increment = 2,
                 },
                 {
                     name = "TextYankPost",
                     mood_increment = 0,
-                    satiety_increment = 5,
+                    satiety_increment = 13,
+                },
+            },
+        },
+
+        {
+            name = "Lucy",
+
+            sprite_update_interval = 6,
+            sprites = lucy_sprites,
+
+            initial_mood = 95,
+            initial_satiety = 95,
+            decay_class = 4,
+
+            vim_events = {
+                {
+                    name = "BufWritePost",
+                    mood_increment = 1,
+                    satiety_increment = 29,
+                },
+                {
+                    name = "TextYankPost",
+                    mood_increment = 8,
+                    satiety_increment = 0,
                 },
             },
         },

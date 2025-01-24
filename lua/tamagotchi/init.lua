@@ -8,7 +8,7 @@ function M.setup(user_config)
 
     local Pet = require("tamagotchi.pet")
 
-    local loaded_pet = Pet.load()
+    local loaded_pet = Pet.load_on_vim_open()
     if loaded_pet then
         _G.tamagotchi_pet = loaded_pet
     else
@@ -54,7 +54,7 @@ function M.setup(user_config)
 
     -- save on leave
     vim.cmd([[
-        autocmd VimLeavePre * lua if _G.tamagotchi_pet then _G.tamagotchi_pet:save() end
+        autocmd VimLeavePre * lua if _G.tamagotchi_pet then _G.tamagotchi_pet:save_on_vim_close() end
     ]])
 
     window.start_refresh_loop(_G.tamagotchi_pet)

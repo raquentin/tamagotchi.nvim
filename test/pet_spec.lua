@@ -60,7 +60,7 @@ describe("pet constructor", function()
                 "Pet UnknownPet has no sprites and no default sprites found! Using empty sprite sets.",
                 notify_messages[1].msg
             )
-            assert.are.equal(vim.log.levels.WARN, notify_messages[1].level)
+            assert.are.equal(vim.log.levels.DEBUG, notify_messages[1].level)
 
             -- restore the original vim.notify function
             vim.notify = original_notify
