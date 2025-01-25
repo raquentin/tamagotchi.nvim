@@ -1,8 +1,9 @@
 local M = {}
 
 -- track current open window, timer
-M.current = nil
+M.current_window = nil
 M.refresh_timer = nil
+M.current_pet = nil
 
 local function ascii_bar(value, max, width)
     local filled = math.floor((value / max) * width) + 1
@@ -169,12 +170,15 @@ local function create_floating_window()
     return { buf = buf, win = win, width = width, height = height }
 end
 
+function M.get_current_pet() return M.current_pet end
+
 function M.open(pet)
     if not pet then
         vim.notify("No pet provided!", vim.log.levels.ERROR)
         return nil
     end
 
+    M.current_pet = pet
     local config = require("tamagotchi.config").values
 
     -- apply retroactive decay
@@ -188,16 +192,39 @@ function M.open(pet)
     pet:set_satiety(pet:get_satiety() - satiety_subtrahend)
 
     -- close open window if exists
-    if M.current and vim.api.nvim_win_is_valid(M.current.win) then
-        vim.api.nvim_win_close(M.current.win, true)
-        M.current = nil
+    if M.current_window and vim.api.nvim_win_is_valid(M.current_window.win) then
+        vim.api.nvim_win_close(M.current_window.win, true)
+        M.current_window = nil
     end
 
-    M.current = create_floating_window()
+    M.current_window = create_floating_window()
 
+    local buf = M.current_window.buf
+
+    vim.api.nvim_buf_set_keymap(
+        buf,
+        "n",
+        "M",
+        "<cmd>lua require('tamagotchi.menu').open_pet_menu()<CR>",
+        { nowait = true, noremap = true, silent = true }
+    )
+    vim.api.nvim_buf_set_keymap(
+        buf,
+        "n",
+        "I",
+        "<cmd>lua print('TODO: show more info')<CR>",
+        { nowait = true, noremap = true, silent = true }
+    )
+    vim.api.nvim_buf_set_keymap(
+        buf,
+        "n",
+        "R",
+        "<cmd>lua print('TODO: reset logic')<CR>",
+        { nowait = true, noremap = true, silent = true }
+    )
     M.update_ui(pet, true)
     M.start_refresh_loop(pet)
-    return M.current
+    return M.current_window
 end
 
 function M.close(pet)
@@ -207,36 +234,40 @@ function M.close(pet)
         M.refresh_timer = nil
     end
 
-    pet:save_on_window_close()
+    if pet then pet:save_on_window_close() end
 
-    if M.current and vim.api.nvim_win_is_valid(M.current.win) then
-        vim.api.nvim_win_close(M.current.win, true)
+    if M.current_window and vim.api.nvim_win_is_valid(M.current_window.win) then
+        vim.api.nvim_win_close(M.current_window.win, true)
     end
-    M.current = nil
+    M.current_window = nil
 end
 
 -- update the buffer lines for the currently open window
 function M.update_ui(pet, update_sprite)
-    if not (M.current and vim.api.nvim_win_is_valid(M.current.win)) then
+    if
+        not (
+            M.current_window and vim.api.nvim_win_is_valid(M.current_window.win)
+        )
+    then
         return
     end
 
-    local width = M.current.width
-    local height = M.current.height
+    local width = M.current_window.width
+    local height = M.current_window.height
 
     if update_sprite then M.last_sprite = pet:get_sprite() end
 
     local final_lines =
         build_final_lines(pet, width, height, M.last_sprite or "", M.tabs)
 
-    vim.api.nvim_buf_set_lines(M.current.buf, 0, -1, false, final_lines)
+    vim.api.nvim_buf_set_lines(M.current_window.buf, 0, -1, false, final_lines)
 
     local bottom_line_idx = #final_lines - 1
-    highlight_bottom_bar(M.current.buf, bottom_line_idx, M.tabs, width)
+    highlight_bottom_bar(M.current_window.buf, bottom_line_idx, M.tabs, width)
 end
 
 function M.toggle(pet)
-    if M.current and vim.api.nvim_win_is_valid(M.current.win) then
+    if M.current_window and vim.api.nvim_win_is_valid(M.current_window.win) then
         M.close(pet)
         return nil
     else
@@ -277,7 +308,10 @@ function M.start_refresh_loop(pet)
             end
 
             -- refresh UI if still open
-            if M.current and vim.api.nvim_win_is_valid(M.current.win) then
+            if
+                M.current_window
+                and vim.api.nvim_win_is_valid(M.current_window.win)
+            then
                 M.update_ui(pet, update_sprite)
             else
                 -- stop timer if closed
