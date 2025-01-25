@@ -1,5 +1,5 @@
 local lucy_sprites = {
-    height = 6,
+    height = 5,
     width = 9,
 
     happy = {
@@ -9,7 +9,6 @@ local lucy_sprites = {
 <( ^.^ )>
    \ /   
     v    
-         
 ]],
         [[
     ^    
@@ -17,7 +16,6 @@ local lucy_sprites = {
 <( o^o )>
    \ /   
     v    
-         
 ]],
     },
 
@@ -28,7 +26,6 @@ local lucy_sprites = {
 <( -.- )>
    \ /   
     v    
-         
 ]],
         [[
     ^    
@@ -36,7 +33,6 @@ local lucy_sprites = {
 <( ._. )>
    \ /   
     v    
-         
 ]],
     },
 
@@ -47,7 +43,6 @@ local lucy_sprites = {
 <( -.- )>
    \ /   
     v    
-         
 ]],
         [[
     ^    
@@ -55,7 +50,6 @@ local lucy_sprites = {
 <( -_- )>
    \ /   
     v    
-         
 ]],
     },
 }

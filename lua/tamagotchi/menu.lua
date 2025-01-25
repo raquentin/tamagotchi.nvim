@@ -8,16 +8,15 @@ local conf = require("telescope.config").values
 local window = require("tamagotchi.window")
 local Pet = require("tamagotchi.pet")
 
--- local variable to hold a timer if you want to animate
+-- TODO: animate sprite in right pane
 local sprite_timer = nil
 
--- We'll need a list of all pets. You might store them in config, or discover them from a file, etc.
 local function get_all_pets()
     local config = require("tamagotchi.config").values
     return config.pets or {}
 end
 
--- Custom previewer that draws the sprite in the preview buffer
+-- custom previewer that draws the sprite in the preview buffer
 local function make_pet_previewer()
     return previewers.new_buffer_previewer({
         define_preview = function(self, entry, status)
@@ -26,7 +25,6 @@ local function make_pet_previewer()
 
             -- entry.value is whichever item is under cursor in the results
             local pet_def = entry.value
-            -- Construct a temporary Pet instance from the definition:
             local pet_obj = Pet:new({
                 name = pet_def.name,
                 sprites = pet_def.sprites or {},
@@ -34,16 +32,16 @@ local function make_pet_previewer()
                 satiety = 80, -- ...
             })
 
-            -- Grab the current sprite frame text
+            -- grab the current sprite frame text
             local sprite = pet_obj:get_sprite()
 
-            -- Set lines in preview buffer
+            -- set lines in preview buffer
             local sprite_lines = {}
             for line in (sprite .. "\n"):gmatch("(.-)\n") do
                 table.insert(sprite_lines, line)
             end
 
-            -- Clear old lines and set new lines
+            -- clear old lines and set new lines
             vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, sprite_lines)
 
             vim.api.nvim_buf_set_option(bufnr, "modifiable", false)
@@ -53,7 +51,7 @@ end
 
 function menu.open_pet_menu()
     -- 1) Close the main tamagotchi window if open
-    local current_pet = window.get_current_pet() -- you'd implement `get_current_pet()` or store it somewhere
+    local current_pet = window.get_current_pet() -- Implement `get_current_pet()` appropriately
     if current_pet then window.close(current_pet) end
 
     -- 2) Gather the list of pets
@@ -63,7 +61,7 @@ function menu.open_pet_menu()
         return
     end
 
-    -- 3) Define the telescope picker
+    -- 3) Define the telescope picker with horizontal layout
     pickers
         .new({
             prompt_title = "Select a Pet",
@@ -80,6 +78,17 @@ function menu.open_pet_menu()
             previewer = make_pet_previewer(),
 
             sorter = conf.generic_sorter(),
+            layout_strategy = "horizontal",
+            layout_config = {
+                width = 0.4, -- 40% of screen width
+                height = 7, -- 7 rows
+                preview_width = 0.3, -- 30% of the Telescope window width for preview
+                prompt_position = "bottom",
+                horizontal = {
+                    mirror = false, -- Preview on the right
+                },
+            },
+            preview_cutoff = 0, -- Always show preview regardless of window size
             attach_mappings = function(prompt_bufnr, map)
                 -- When user confirms ( <CR> ), pick that pet
                 local actions = require("telescope.actions")
@@ -96,7 +105,7 @@ function menu.open_pet_menu()
                     local chosen_pet = Pet:new({
                         name = chosen_pet_def.name,
                         sprites = chosen_pet_def.sprites,
-                        -- You might also restore mood/satiety from saved data, etc.
+                        -- Restore mood/satiety from saved data, etc.
                     })
                     window.open(chosen_pet)
                 end
@@ -109,5 +118,4 @@ function menu.open_pet_menu()
         })
         :find()
 end
-
 return menu
