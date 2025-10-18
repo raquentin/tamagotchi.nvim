@@ -1,6 +1,8 @@
-highlight! default TamagotchiTab1 guifg=#ffffff guibg=DarkCyan
-highlight! default TamagotchiTab2 guifg=#ffffff guibg=DarkBlue
-highlight! default TamagotchiTab3 guifg=#ffffff guibg=DarkRed
+" link to existing highlight groups that respect the user's theme
+highlight! default link TamagotchiTab1 PmenuSel
+highlight! default link TamagotchiTab2 Visual
+highlight! default link TamagotchiTab3 DiffChange
+highlight! default link TamagotchiTab4 DiffDelete
 
 if exists('g:loaded_tamagotchi')
   finish

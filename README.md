@@ -1,14 +1,11 @@
 # 🐱 tamagotchi.nvim
 
-A configurable plugin for raising pets across Neovim sessions.
-
-> [!WARNING]  
-> This project is days old. The `.setup({` API will change often.
+is a configurable plugin for raising pets across Neovim sessions.
 
 ## Features
 - Floating Window UI: Displays your pet with sprite animations, stats, and a colored bottom bar with interactive tabs.
 - Customizable Behavior: Configure tick length, decay probabilities, and Vim events that affect your pet's mood and satiety.
-- (soon) Multiple Pets: Manage a list of pets, select different ones from a menu, view more info, and reset as needed.
+- Multiple Pets: Manage a list of pets, select different ones from a menu, view more info, and reset as needed.
 - Persistent State: Your pet's mood and satiety persist across Neovim sessions.
 
 ## Installation
@@ -34,10 +31,9 @@ use { "raquentin/tamagotchi.nvim", }
 ## Configuration
 
 ```lua
-```lua
 require('tamagotchi').setup({
   window_toggle_keybind = "<leader>tg",
-  tick_length_ms = 100,
+  tick_length_ms = 1000, -- 1 second per tick
   default_pet = "Lucy",
   pets = {
     {
@@ -46,20 +42,20 @@ require('tamagotchi').setup({
       sprite_update_interval = 5,
       sprites = kitty_sprites,
 
-      initial_mood = 95,
-      initial_satiety = 95,
-      decay_speed = 3,
+      initial_mood = 75,
+      initial_satiety = 75,
+      decay_speed = 2, -- 0-6 scale (0=none, 6=extreme)
 
       vim_events = {
         {
           name = "BufWritePost",
-          mood_increment = 22,
-          satiety_increment = 2,
+          mood_increment = 5,
+          satiety_increment = 3,
         },
         {
           name = "TextYankPost",
-          mood_increment = 0,
-          satiety_increment = 13,
+          mood_increment = 2,
+          satiety_increment = 1,
         },
       },
     },
@@ -72,11 +68,15 @@ require('tamagotchi').setup({
 
 ## Native Pets
 
-- Ilya: a cat
-- Lucy: a star and mascot of the [Gleam programming language](https://gleam.run/)
+- **Kitty**: a cat (moderate decay, balanced)
+- **Lucy**: a star and mascot of the [Gleam programming language](https://gleam.run/) (faster decay, food-focused)
+- **Churro**: a dog (moderate decay, mood-focused)
+- **Bunny**: a bunny (active, high satiety needs)
+- **Dragon**: a dragon (slow decay, hardy)
+- **Grizz**: a bear (moderate decay, very hungry)
+
+## Development
 
 ## Contributing
 
-Submit issues and PRs as you please.
-
-If you have a more general question, start a [discussion](https://github.com/raquentin/tamagotchi.nvim/discussions).
+Submit issues and PRs as you please. If you have a more general question, start a [discussion](https://github.com/raquentin/tamagotchi.nvim/discussions).

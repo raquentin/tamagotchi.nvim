@@ -6,7 +6,11 @@ M.refresh_timer = nil
 M.current_pet = nil
 
 local function ascii_bar(value, max, width)
-    local filled = math.floor((value / max) * width) + 1
+    assert(value >= 0, "value must be non-negative")
+    assert(max > 0, "max must be positive")
+    assert(width > 0, "width must be positive")
+
+    local filled = math.floor((value / max) * width)
     local unfilled = width - filled
     return "[" .. string.rep("#", filled) .. string.rep("-", unfilled) .. "]"
 end
@@ -14,6 +18,12 @@ end
 -- center `text` within `width` by adding left/right padding.
 -- if text is longer than width, it is truncated.
 function M.center_text(text, width)
+    assert(type(text) == "string", "text must be a string")
+    assert(
+        type(width) == "number" and width > 0,
+        "width must be a positive number"
+    )
+
     if #text >= width then return text:sub(1, width) end
     local left_pad = math.floor((width - #text) / 2)
     local right_pad = width - #text - left_pad
@@ -33,10 +43,8 @@ local function build_top_lines(pet, width, height, sprite_override)
     local sprite_width = 0
     for line in (sprite_text .. "\n"):gmatch("(.-)\n") do
         table.insert(sprite_lines, line)
-        local line_length = #line
-        if line_length > sprite_width then sprite_width = line_length end
+        if #line > sprite_width then sprite_width = #line end
     end
-    sprite_width = sprite_width
 
     local right_block_width = total_content_width - sprite_width - PAD
     if right_block_width < 1 then right_block_width = 1 end
@@ -71,7 +79,7 @@ local function build_top_lines(pet, width, height, sprite_override)
         if #combined < width then
             combined = combined .. string.rep(" ", width - #combined)
         elseif #combined > width then
-            combined = combined:sub(1, width) -- truncate
+            combined = combined:sub(1, width)
         end
 
         final_lines[i + 1] = combined
@@ -161,6 +169,7 @@ local function create_floating_window()
         height = height,
         row = row,
         col = col,
+        border = "single",
     }
 
     local win = vim.api.nvim_open_win(buf, true, opts)
@@ -173,23 +182,33 @@ end
 function M.get_current_pet() return M.current_pet end
 
 function M.open(pet)
-    if not pet then
-        vim.notify("No pet provided!", vim.log.levels.ERROR)
-        return nil
-    end
+    assert(pet, "pet is required")
+    assert(type(pet) == "table", "pet must be a table")
+    assert(type(pet.get_mood) == "function", "pet must have get_mood method")
+    assert(
+        type(pet.get_satiety) == "function",
+        "pet must have get_satiety method"
+    )
+    assert(
+        type(pet.get_sprite) == "function",
+        "pet must have get_sprite method"
+    )
 
     M.current_pet = pet
-    local config = require("tamagotchi.config").values
 
-    -- apply retroactive decay
-    local time_elapsed = vim.loop.now() - pet.last_vim_close_time
-    local ticks_since = time_elapsed / config.tick_length_ms
-    local ticks_with_decay_mood = ticks_since * pet.mood_decay_probability
-    local mood_subtrahend = ticks_with_decay_mood * 1 -- todo: parameterize 1
-    local ticks_with_decay_satiety = ticks_since * pet.satiety_decay_probability
-    local satiety_subtrahend = ticks_with_decay_satiety * 1 -- todo: parameterize 1
-    pet:set_mood(pet:get_mood() - mood_subtrahend)
-    pet:set_satiety(pet:get_satiety() - satiety_subtrahend)
+    -- Apply retroactive decay since last window close
+    local elapsed_ms = vim.loop.now() - pet.last_window_close_time
+    local elapsed_seconds = elapsed_ms / 1000
+
+    -- Calculate expected decay (cap at 10 minutes for window toggles)
+    local max_window_decay_time = 600 -- 10 minutes
+    local effective_time = math.min(elapsed_seconds, max_window_decay_time)
+
+    local mood_decay = pet.mood_decay_probability * effective_time
+    local satiety_decay = pet.satiety_decay_probability * effective_time
+
+    pet:set_mood(pet:get_mood() - mood_decay)
+    pet:set_satiety(pet:get_satiety() - satiety_decay)
 
     -- close open window if exists
     if M.current_window and vim.api.nvim_win_is_valid(M.current_window.win) then
@@ -201,27 +220,133 @@ function M.open(pet)
 
     local buf = M.current_window.buf
 
-    vim.api.nvim_buf_set_keymap(
-        buf,
-        "n",
-        "M",
-        "<cmd>lua require('tamagotchi.menu').open_pet_menu()<CR>",
-        { nowait = true, noremap = true, silent = true }
-    )
-    vim.api.nvim_buf_set_keymap(
-        buf,
-        "n",
-        "I",
-        "<cmd>lua print('TODO: show more info')<CR>",
-        { nowait = true, noremap = true, silent = true }
-    )
-    vim.api.nvim_buf_set_keymap(
-        buf,
-        "n",
-        "R",
-        "<cmd>lua print('TODO: reset logic')<CR>",
-        { nowait = true, noremap = true, silent = true }
-    )
+    vim.api.nvim_buf_set_keymap(buf, "n", "M", "", {
+        nowait = true,
+        noremap = true,
+        silent = true,
+        callback = function() require("tamagotchi.menu").open_pet_menu() end,
+    })
+    vim.api.nvim_buf_set_keymap(buf, "n", "I", "", {
+        nowait = true,
+        noremap = true,
+        silent = true,
+        callback = function()
+            require("tamagotchi.info").show_info(_G.tamagotchi_pet)
+        end,
+    })
+    vim.api.nvim_buf_set_keymap(buf, "n", "R", "", {
+        nowait = true,
+        noremap = true,
+        silent = true,
+        callback = function()
+            local dialogue = require("tamagotchi.dialogue")
+            dialogue.choice(
+                "Reset Options",
+                "What would you like to reset?",
+                "Reset Current Pet Only",
+                "Reset All Pets (Delete All Saves)",
+                function()
+                    -- reset current pet only
+                    dialogue.confirm(
+                        "Reset Current Pet",
+                        "Are you sure you want to reset "
+                            .. (_G.tamagotchi_pet.name or "your pet")
+                            .. "? This will reset all stats and age to initial values.",
+                        function()
+                            _G.tamagotchi_pet:reset()
+                            _G.tamagotchi_pet:save_on_vim_close()
+                            vim.notify(
+                                "Pet has been reset!",
+                                vim.log.levels.INFO
+                            )
+                        end,
+                        nil
+                    )
+                end,
+                function()
+                    -- reset all pets (delete all save files)
+                    dialogue.confirm(
+                        "Reset All Pets",
+                        "Are you ABSOLUTELY SURE you want to delete ALL pet save files? This cannot be undone!",
+                        function()
+                            local data_dir = vim.fn.stdpath("data")
+                            local config = require("tamagotchi.config").values
+                            local deleted_count = 0
+
+                            -- delete all pet-specific save files
+                            for _, pet_def in ipairs(config.pets) do
+                                local save_path = data_dir
+                                    .. "/tamagotchi_"
+                                    .. pet_def.name
+                                    .. ".json"
+                                if vim.fn.filereadable(save_path) == 1 then
+                                    vim.fn.delete(save_path)
+                                    deleted_count = deleted_count + 1
+                                end
+                            end
+
+                            -- delete generic save file
+                            local generic_save = data_dir .. "/tamagotchi.json"
+                            if vim.fn.filereadable(generic_save) == 1 then
+                                vim.fn.delete(generic_save)
+                                deleted_count = deleted_count + 1
+                            end
+
+                            -- reset current pet
+                            _G.tamagotchi_pet:reset()
+                            _G.tamagotchi_pet:save_on_vim_close()
+
+                            vim.notify(
+                                "Deleted "
+                                    .. deleted_count
+                                    .. " save file(s) and reset current pet!",
+                                vim.log.levels.WARN
+                            )
+                        end,
+                        nil
+                    )
+                end
+            )
+        end,
+    })
+    vim.api.nvim_buf_set_keymap(buf, "n", "N", "", {
+        nowait = true,
+        noremap = true,
+        silent = true,
+        callback = function()
+            local dialogue = require("tamagotchi.dialogue")
+            local current_pet = _G.tamagotchi_pet
+            dialogue.input(
+                "Rename Pet",
+                "Enter a new name for your pet:",
+                current_pet.name,
+                function(new_name)
+                    local old_name = current_pet.name
+                    local old_save_path = current_pet:get_save_path()
+
+                    current_pet:set_name(new_name)
+                    current_pet:save_on_vim_close()
+
+                    if
+                        old_name ~= new_name
+                        and vim.fn.filereadable(old_save_path) == 1
+                    then
+                        vim.fn.delete(old_save_path)
+                    end
+
+                    vim.notify(
+                        string.format(
+                            "Renamed pet from '%s' to '%s'!",
+                            old_name,
+                            new_name
+                        ),
+                        vim.log.levels.INFO
+                    )
+                end,
+                nil
+            )
+        end,
+    })
     M.update_ui(pet, true)
     M.start_refresh_loop(pet)
     return M.current_window
@@ -276,12 +401,19 @@ function M.toggle(pet)
 end
 
 function M.start_refresh_loop(pet)
+    assert(pet, "pet is required for refresh loop")
+    assert(
+        type(pet.sprite_update_interval) == "number",
+        "pet must have sprite_update_interval"
+    )
+
     local sprite_interval = pet.sprite_update_interval
 
-    -- start at interval so it prints on initial tick
+    -- Start at interval so it prints on initial tick
     M.sprite_counter = sprite_interval
     M.last_sprite = ""
 
+    -- Stop existing timer if any
     if M.refresh_timer then
         M.refresh_timer:stop()
         M.refresh_timer:close()
@@ -289,16 +421,15 @@ function M.start_refresh_loop(pet)
     end
 
     local config = require("tamagotchi.config").values
-
-    local i = 0
+    assert(config.tick_length_ms, "tick_length_ms not found in config")
 
     M.refresh_timer = vim.loop.new_timer()
     M.refresh_timer:start(
         0,
         config.tick_length_ms,
         vim.schedule_wrap(function()
-            i = i + 1
-            pet:update()
+            -- Update pet state
+            if pet and pet.update then pet:update() end
 
             M.sprite_counter = (M.sprite_counter or 0) + 1
             local update_sprite = false
@@ -307,14 +438,14 @@ function M.start_refresh_loop(pet)
                 update_sprite = true
             end
 
-            -- refresh UI if still open
+            -- Refresh UI if still open
             if
                 M.current_window
                 and vim.api.nvim_win_is_valid(M.current_window.win)
             then
                 M.update_ui(pet, update_sprite)
             else
-                -- stop timer if closed
+                -- Stop timer if window was closed
                 M.close(pet)
             end
         end)
@@ -331,8 +462,12 @@ M.tabs = {
         hl_group = "TamagotchiTab2",
     },
     {
-        label = "[R]eset",
+        label = "Re[n]ame",
         hl_group = "TamagotchiTab3",
+    },
+    {
+        label = "[R]eset",
+        hl_group = "TamagotchiTab4",
     },
 }
 

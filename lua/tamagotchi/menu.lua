@@ -80,9 +80,9 @@ function menu.open_pet_menu()
             sorter = conf.generic_sorter(),
             layout_strategy = "horizontal",
             layout_config = {
-                width = 0.4, -- 40% of screen width
-                height = 7, -- 7 rows
-                preview_width = 0.3, -- 30% of the Telescope window width for preview
+                width = 0.5,
+                height = 0.5,
+                preview_width = 0.35,
                 prompt_position = "bottom",
                 horizontal = {
                     mirror = false, -- Preview on the right
@@ -101,13 +101,95 @@ function menu.open_pet_menu()
                     if not selection then return end
 
                     local chosen_pet_def = selection.value
-                    -- Re-open the main Tamagotchi window with that pet
-                    local chosen_pet = Pet:new({
-                        name = chosen_pet_def.name,
-                        sprites = chosen_pet_def.sprites,
-                        -- Restore mood/satiety from saved data, etc.
-                    })
-                    window.open(chosen_pet)
+                    local current_pet = _G.tamagotchi_pet
+
+                    -- If selecting the same pet, just reopen
+                    if
+                        current_pet
+                        and current_pet.name == chosen_pet_def.name
+                    then
+                        window.open(current_pet)
+                        return
+                    end
+
+                    -- If we have a current pet, ask what to do
+                    if current_pet then
+                        local dialogue = require("tamagotchi.dialogue")
+                        dialogue.choice(
+                            "Switch Pet: " .. chosen_pet_def.name,
+                            string.format(
+                                "You currently have %s. Would you like to transfer progress (just change appearance) or start a new pet life? Note: Starting a new pet means you'll have both pets to care for.",
+                                current_pet.name
+                            ),
+                            "Transfer Progress",
+                            "Start New Life",
+                            function()
+                                -- Transfer progress option
+                                local new_pet = Pet:new(chosen_pet_def)
+                                current_pet:transfer_stats_to(new_pet)
+                                _G.tamagotchi_pet = new_pet
+                                new_pet:save_on_vim_close()
+                                vim.notify(
+                                    "Transferred progress to "
+                                        .. new_pet.name
+                                        .. "!",
+                                    vim.log.levels.INFO
+                                )
+                                window.open(new_pet)
+                            end,
+                            function()
+                                -- Start new life option
+                                -- Save current pet
+                                current_pet:save_on_vim_close()
+
+                                -- Try to load existing save for new pet, or create fresh
+                                local save_path = vim.fn.stdpath("data")
+                                    .. "/tamagotchi_"
+                                    .. chosen_pet_def.name
+                                    .. ".json"
+                                local loaded_pet =
+                                    Pet.load_on_vim_open(save_path)
+
+                                local new_pet
+                                if
+                                    loaded_pet
+                                    and loaded_pet.name
+                                        == chosen_pet_def.name
+                                then
+                                    new_pet = loaded_pet
+                                else
+                                    new_pet = Pet:new(chosen_pet_def)
+                                end
+
+                                _G.tamagotchi_pet = new_pet
+                                vim.notify(
+                                    "Started caring for " .. new_pet.name .. "!",
+                                    vim.log.levels.INFO
+                                )
+                                window.open(new_pet)
+                            end
+                        )
+                    else
+                        -- No current pet, just load or create
+                        local save_path = vim.fn.stdpath("data")
+                            .. "/tamagotchi_"
+                            .. chosen_pet_def.name
+                            .. ".json"
+                        local loaded_pet = Pet.load_on_vim_open(save_path)
+
+                        local chosen_pet
+                        if
+                            loaded_pet
+                            and loaded_pet.name == chosen_pet_def.name
+                        then
+                            chosen_pet = loaded_pet
+                        else
+                            chosen_pet = Pet:new(chosen_pet_def)
+                        end
+
+                        _G.tamagotchi_pet = chosen_pet
+                        window.open(chosen_pet)
+                    end
                 end
 
                 map("i", "<CR>", function() select_pet() end)
