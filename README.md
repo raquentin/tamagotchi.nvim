@@ -2,6 +2,8 @@
 
 is a configurable plugin for raising pets across Neovim sessions.
 
+<img width="750" height="275" alt="Screenshot 2025-10-17 at 11 09 41 PM" src="https://github.com/user-attachments/assets/9b4d5e4c-c882-414f-bb20-d4007d204f38" />
+
 ## Features
 - Floating Window UI: Displays your pet with sprite animations, stats, and a colored bottom bar with interactive tabs.
 - Customizable Behavior: Configure tick length, decay probabilities, and Vim events that affect your pet's mood and satiety.
@@ -63,9 +65,6 @@ require('tamagotchi').setup({
 })
 ```
 
-## Screenshot
-![2025-01-19T00:05:57,318965100-05:00](https://github.com/user-attachments/assets/78a046eb-c9fe-4e70-8a83-f5f705810779)
-
 ## Native Pets
 
 - **Kitty**: a cat (moderate decay, balanced)
@@ -75,7 +74,7 @@ require('tamagotchi').setup({
 - **Dragon**: a dragon (slow decay, hardy)
 - **Grizz**: a bear (moderate decay, very hungry)
 
-## Development
+<img width="905" height="519" alt="Screenshot 2025-10-17 at 11 10 15 PM" src="https://github.com/user-attachments/assets/fddf828d-2c86-49c2-a157-49bcac81467f" />
 
 ## Contributing
 
