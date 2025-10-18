@@ -24,6 +24,7 @@ std = "luajit"
 -- Additional files/patterns to exclude
 exclude_files = {
     ".luacheckrc",
+    "lua/tamagotchi/sprites/*.lua", -- sprites have intentional trailing whitespace
 }
 
 -- Maximum line length

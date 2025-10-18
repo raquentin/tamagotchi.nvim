@@ -1,7 +1,7 @@
 local dragon_sprites = {
     height = 4,
     width = 11,
-    
+
     happy = {
         [[
    /\___/\  
@@ -28,7 +28,7 @@ local dragon_sprites = {
    \___/   
 ]],
     },
-    
+
     hungry = {
         [[
    /\___/\  
@@ -55,7 +55,7 @@ local dragon_sprites = {
    \___/   
 ]],
     },
-    
+
     neutral = {
         [[
    /\___/\  
@@ -85,5 +85,3 @@ local dragon_sprites = {
 }
 
 return dragon_sprites
-
-

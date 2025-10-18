@@ -8,9 +8,6 @@ local conf = require("telescope.config").values
 local window = require("tamagotchi.window")
 local Pet = require("tamagotchi.pet")
 
--- TODO: animate sprite in right pane
-local sprite_timer = nil
-
 local function get_all_pets()
     local config = require("tamagotchi.config").values
     return config.pets or {}
@@ -101,25 +98,27 @@ function menu.open_pet_menu()
                     if not selection then return end
 
                     local chosen_pet_def = selection.value
-                    local current_pet = _G.tamagotchi_pet
+                    local active_pet = _G.tamagotchi_pet
 
                     -- If selecting the same pet, just reopen
                     if
-                        current_pet
-                        and current_pet.name == chosen_pet_def.name
+                        active_pet
+                        and active_pet.name == chosen_pet_def.name
                     then
-                        window.open(current_pet)
+                        window.open(active_pet)
                         return
                     end
 
                     -- If we have a current pet, ask what to do
-                    if current_pet then
+                    if active_pet then
                         local dialogue = require("tamagotchi.dialogue")
                         dialogue.choice(
                             "Switch Pet: " .. chosen_pet_def.name,
                             string.format(
-                                "You currently have %s. Would you like to transfer progress (just change appearance) or start a new pet life? Note: Starting a new pet means you'll have both pets to care for.",
-                                current_pet.name
+                                "You currently have %s. Would you like to transfer progress "
+                                    .. "(just change appearance) or start a new pet life? "
+                                    .. "Note: Starting a new pet means you'll have both pets to care for.",
+                                active_pet.name
                             ),
                             "Transfer Progress",
                             "Start New Life",

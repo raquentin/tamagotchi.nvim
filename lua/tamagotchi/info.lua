@@ -18,7 +18,6 @@ function M.show_info(pet)
     assert(pet, "pet is required")
 
     local session_duration = pet:get_session_duration()
-    local age = pet:get_age()
 
     local lines = {
         "╔════════════════════════════════════════╗",

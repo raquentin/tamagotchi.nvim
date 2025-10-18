@@ -16,7 +16,7 @@ function M.setup(user_config)
         -- Find pet definition by name or pick a random one
         local chosen_def = nil
         local desired_name = config.values.default_pet
-        
+
         if desired_name then
             for _, pet_def in ipairs(config.values.pets) do
                 if pet_def.name == desired_name then
@@ -28,7 +28,10 @@ function M.setup(user_config)
 
         -- Fallback to random pet if no match found
         if not chosen_def then
-            assert(#config.values.pets > 0, "No pets available in configuration")
+            assert(
+                #config.values.pets > 0,
+                "No pets available in configuration"
+            )
             math.randomseed(os.time())
             local idx = math.random(#config.values.pets)
             chosen_def = config.values.pets[idx]
@@ -56,7 +59,10 @@ function M.setup(user_config)
                         evt_def.satiety_increment
                     )
                 end,
-                group = vim.api.nvim_create_augroup("Tamagotchi_" .. evt_def.name, { clear = true })
+                group = vim.api.nvim_create_augroup(
+                    "Tamagotchi_" .. evt_def.name,
+                    { clear = true }
+                ),
             })
         end
     end
@@ -65,11 +71,9 @@ function M.setup(user_config)
     vim.api.nvim_create_autocmd("VimLeavePre", {
         pattern = "*",
         callback = function()
-            if _G.tamagotchi_pet then
-                _G.tamagotchi_pet:save_on_vim_close()
-            end
+            if _G.tamagotchi_pet then _G.tamagotchi_pet:save_on_vim_close() end
         end,
-        group = vim.api.nvim_create_augroup("TamagotchiSave", { clear = true })
+        group = vim.api.nvim_create_augroup("TamagotchiSave", { clear = true }),
     })
 
     window.start_refresh_loop(_G.tamagotchi_pet)

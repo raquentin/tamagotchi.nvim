@@ -1,7 +1,7 @@
 local doggo_sprites = {
     height = 3,
     width = 9,
-    
+
     happy = {
         [[
   /\_/\  
@@ -24,7 +24,7 @@ local doggo_sprites = {
  /|   |\  
 ]],
     },
-    
+
     hungry = {
         [[
   /\_/\  
@@ -47,7 +47,7 @@ local doggo_sprites = {
  /|   |\  
 ]],
     },
-    
+
     neutral = {
         [[
   /\_/\  
@@ -73,5 +73,3 @@ local doggo_sprites = {
 }
 
 return doggo_sprites
-
-
