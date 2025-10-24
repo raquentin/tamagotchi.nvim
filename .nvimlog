@@ -1,0 +1,2 @@
+WRN 2025-10-24T04:44:23.186 ?.14991    server_start:193: Failed to start server: operation not permitted: /var/folders/d_/n86n84t53v50zq4pdb1g9w400000gn/T/nvim.race/NiQ1m7/nvim.14991.0
+WRN 2025-10-24T04:45:04.437 ?.15026    server_start:193: Failed to start server: operation not permitted: /var/folders/d_/n86n84t53v50zq4pdb1g9w400000gn/T/nvim.race/aUaWQI/nvim.15026.0

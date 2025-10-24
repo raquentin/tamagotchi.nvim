@@ -65,23 +65,66 @@ function M.center_text(text, width)
 end
 
 -- builds the top layout (sprite left, attrs right)
-local function build_top_lines(pet, width, height, sprite_override)
-    local PAD = 1
-
-    local content_height = height - PAD - 1
-    local total_content_width = width - PAD
-
-    -- break sprite into lines
-    local sprite_text = sprite_override or pet:get_sprite()
-    local sprite_lines = {}
-    local sprite_width = 0
+-- normalize sprite to rectangular bounding box, trimming whitespace
+local function normalize_sprite(sprite_text)
+    local lines = {}
+    
     for line in (sprite_text .. "\n"):gmatch("(.-)\n") do
-        table.insert(sprite_lines, line)
-        if #line > sprite_width then sprite_width = #line end
+        table.insert(lines, line)
     end
+    
+    -- find the actual content bounds (trim leading/trailing whitespace)
+    local min_start = math.huge
+    local max_end = 0
+    
+    for _, line in ipairs(lines) do
+        local trimmed = line:match("^%s*(.-)%s*$")
+        if trimmed ~= "" then
+            -- find where non-whitespace starts and ends
+            local start_pos = line:find("%S")
+            local end_pos = line:find("%s*$") - 1
+            if start_pos then
+                min_start = math.min(min_start, start_pos)
+                max_end = math.max(max_end, end_pos)
+            end
+        end
+    end
+    
+    -- if no content found, fallback to original behavior
+    if min_start == math.huge then
+        min_start = 1
+        max_end = 0
+        for _, line in ipairs(lines) do
+            max_end = math.max(max_end, #line)
+        end
+    end
+    
+    local content_width = max_end - min_start + 1
+    
+    -- extract and normalize the actual content
+    local normalized = {}
+    for _, line in ipairs(lines) do
+        local content = ""
+        if #line >= min_start then
+            content = line:sub(min_start, math.min(#line, max_end))
+        end
+        -- pad to content_width
+        if #content < content_width then
+            local padding_needed = content_width - #content
+            local left_pad = math.floor(padding_needed / 2)
+            local right_pad = padding_needed - left_pad
+            content = string.rep(" ", left_pad) .. content .. string.rep(" ", right_pad)
+        end
+        table.insert(normalized, content)
+    end
+    
+    return normalized, content_width, #normalized
+end
 
-    local right_block_width = total_content_width - sprite_width - PAD
-    if right_block_width < 1 then right_block_width = 1 end
+local function build_top_lines(pet, width, height, sprite_override)
+    -- normalize sprite to rectangular box
+    local sprite_text = sprite_override or pet:get_sprite()
+    local sprite_lines, sprite_width, sprite_height = normalize_sprite(sprite_text)
 
     -- prepare info lines
     local info_lines = {
@@ -90,34 +133,61 @@ local function build_top_lines(pet, width, height, sprite_override)
         ("satiety: %s"):format(ascii_bar(pet:get_satiety(), 100, 10)),
         ("mood:    %s"):format(ascii_bar(pet:get_mood(), 100, 10)),
     }
-
-    local lines_count = math.max(#sprite_lines, #info_lines, content_height)
-
-    local final_lines = {}
-    final_lines[1] = string.rep(" ", width)
-
-    -- main content
-    for i = 1, lines_count do
-        local sprite_str = sprite_lines[i] or ""
-        sprite_str = M.center_text(sprite_str, sprite_width)
-
-        local info_str = info_lines[i] or ""
-        info_str = M.center_text(info_str, right_block_width)
-
-        local combined = string.rep(" ", PAD)
-            .. sprite_str
-            .. string.rep(" ", PAD)
-            .. info_str
-
-        -- pad to right edge or clip off right edge
-        if #combined < width then
-            combined = combined .. string.rep(" ", width - #combined)
-        elseif #combined > width then
-            combined = combined:sub(1, width)
-        end
-
-        final_lines[i + 1] = combined
+    local info_height = #info_lines
+    local info_width = 0
+    for _, line in ipairs(info_lines) do
+        if #line > info_width then info_width = #line end
     end
+
+    -- calculate content dimensions
+    local content_height = math.max(sprite_height, info_height)
+    
+    -- calculate the gap between sprite and stats to center them with equal padding
+    -- total_content_width = left_pad + sprite_width + gap + info_width + right_pad
+    -- we want: left_pad = right_pad
+    local min_gap = 3
+    local available_space = width - sprite_width - info_width
+    local gap = math.max(min_gap, math.floor(available_space / 3))
+    
+    -- calculate padding to ensure left_pad == right_pad
+    local total_padding = width - sprite_width - gap - info_width
+    local left_pad = math.floor(total_padding / 2)
+    local right_pad = total_padding - left_pad
+    
+    local final_lines = {}
+    
+    -- add 1 empty line at top
+    table.insert(final_lines, string.rep(" ", width))
+    
+    -- build content lines (sprite and stats vertically aligned to top)
+    for i = 1, content_height do
+        local line = string.rep(" ", left_pad)
+        
+        -- add sprite content (or blank if outside sprite bounds)
+        if i <= sprite_height then
+            line = line .. sprite_lines[i]
+        else
+            line = line .. string.rep(" ", sprite_width)
+        end
+        
+        -- add gap between sprite and stats
+        line = line .. string.rep(" ", gap)
+        
+        -- add info content (or blank if outside info bounds)
+        if i <= info_height then
+            line = line .. info_lines[i]
+        else
+            line = line .. string.rep(" ", info_width)
+        end
+        
+        -- add right padding (ensures exact equal padding)
+        line = line .. string.rep(" ", right_pad)
+        
+        table.insert(final_lines, line)
+    end
+    
+    -- add 1 empty line after content
+    table.insert(final_lines, string.rep(" ", width))
 
     return final_lines
 end
@@ -180,40 +250,36 @@ local function highlight_bottom_bar(buf, line_num, tabs, width)
 end
 
 -- highlight the sprite with the pet's color theme
-local function highlight_sprite(buf, pet, sprite_text, height)
+local function highlight_sprite(buf, pet, sprite_text, width)
     if not pet or not pet.color_theme then return end
     
     local color_hl = COLOR_THEME_MAP[pet.color_theme]
     if not color_hl then return end
     
-    -- calculate sprite dimensions
-    local sprite_lines = {}
-    local sprite_width = 0
-    for line in (sprite_text .. "\n"):gmatch("(.-)\n") do
-        table.insert(sprite_lines, line)
-        if #line > sprite_width then sprite_width = #line end
-    end
+    -- normalize sprite to get dimensions
+    local sprite_lines, sprite_width, sprite_height = normalize_sprite(sprite_text)
     
-    -- highlight each sprite line
-    -- sprites start at line 1 (after the blank line at 0) with PAD=1 offset
-    local PAD = 1
-    for i, sprite_line in ipairs(sprite_lines) do
-        if sprite_line ~= "" then
-            local line_idx = i -- line index in buffer (1-based, line 0 is blank)
-            -- calculate actual sprite position in centered layout
-            local padding_left = PAD + math.floor((sprite_width - #sprite_line) / 2)
-            local start_col = padding_left
-            local end_col = start_col + #sprite_line
-            
-            vim.api.nvim_buf_add_highlight(
-                buf,
-                0,
-                color_hl,
-                line_idx,
-                start_col,
-                end_col
-            )
-        end
+    -- calculate left padding (same logic as build_top_lines)
+    local info_width = 30
+    local min_gap = 3
+    local available_space = width - sprite_width - info_width
+    local gap = math.max(min_gap, math.floor(available_space / 3))
+    local left_pad = math.floor((width - sprite_width - gap - info_width) / 2)
+    
+    -- sprite starts at line 1 (after the top empty line at line 0)
+    for i = 1, sprite_height do
+        local buffer_line_idx = i -- line 1, 2, 3, etc
+        local start_col = left_pad
+        local end_col = left_pad + sprite_width
+        
+        vim.api.nvim_buf_add_highlight(
+            buf,
+            0,
+            color_hl,
+            buffer_line_idx,
+            start_col,
+            end_col
+        )
     end
 end
 
@@ -226,10 +292,37 @@ local function build_final_lines(pet, width, height, sprite_override, tabs)
     return top_lines
 end
 
+-- calculate optimal window dimensions based on pet sprite
+local function calculate_window_dimensions(pet)
+    -- get sprite dimensions
+    local sprite_text = pet:get_sprite()
+    local _, sprite_width, sprite_height = normalize_sprite(sprite_text)
+    
+    -- info section dimensions
+    local info_height = 4 -- we have 4 info lines
+    local info_width = 30 -- approximate, "satiety: [##########]" is ~22 chars
+    
+    -- calculate content dimensions
+    local content_height = math.max(sprite_height, info_height)
+    
+    -- calculate minimum width needed for content with equal padding
+    local min_gap = 3
+    local min_width = sprite_width + min_gap + info_width + 10 -- 10 for side padding
+    
+    -- vertical layout: 1 empty + content + 1 empty + 1 tab bar
+    local total_height = 1 + content_height + 1 + 1
+    
+    -- ensure minimum dimensions
+    local width = math.max(min_width, 40)
+    local height = total_height
+    
+    return width, height
+end
+
 -- create the floating window (a scratch buffer)
-local function create_floating_window()
-    local width = math.floor(vim.o.columns * 0.4)
-    local height = 7
+local function create_floating_window(pet)
+    local width, height = calculate_window_dimensions(pet)
+    
     local row = math.floor((vim.o.lines - height) / 2)
     local col = math.floor((vim.o.columns - width) / 2)
 
@@ -288,7 +381,7 @@ function M.open(pet)
         M.current_window = nil
     end
 
-    M.current_window = create_floating_window()
+    M.current_window = create_floating_window(pet)
 
     local buf = M.current_window.buf
 
@@ -438,7 +531,7 @@ function M.update_ui(pet, update_sprite)
     vim.api.nvim_buf_set_lines(M.current_window.buf, 0, -1, false, final_lines)
 
     -- highlight the sprite with the pet's color
-    highlight_sprite(M.current_window.buf, pet, sprite_to_use, height)
+    highlight_sprite(M.current_window.buf, pet, sprite_to_use, width)
     
     local bottom_line_idx = #final_lines - 1
     highlight_bottom_bar(M.current_window.buf, bottom_line_idx, tabs, width)
