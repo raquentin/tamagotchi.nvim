@@ -33,7 +33,7 @@ function Pet:new(o)
     local config = require("tamagotchi.config").values
 
     if not o.name then
-        vim.notify("Pet created without a name!", vim.log.levels.DEBUG)
+        vim.notify("pet created without a name!", vim.log.levels.DEBUG)
     end
 
     -- Use sprites from global config defaults if not provided
@@ -46,7 +46,7 @@ function Pet:new(o)
     if not o.sprites then
         vim.notify(
             string.format(
-                "Pet '%s' has no sprites! Using empty sprite sets.",
+                "pet '%s' has no sprites! using empty sprite sets.",
                 o.name or "unknown"
             ),
             vim.log.levels.DEBUG
@@ -85,6 +85,9 @@ function Pet:new(o)
     o.total_satiety_gained = o.total_satiety_gained or 0
     o.times_fed = o.times_fed or 0
     o.times_played_with = o.times_played_with or 0
+
+    -- UI customization
+    o.color_theme = o.color_theme or nil
 
     return o
 end

@@ -1,8 +1,17 @@
 " link to existing highlight groups that respect the user's theme
-highlight! default link TamagotchiTab1 PmenuSel
-highlight! default link TamagotchiTab2 Visual
-highlight! default link TamagotchiTab3 DiffChange
-highlight! default link TamagotchiTab4 DiffDelete
+" tab highlights - using more colorful options
+highlight! default link TamagotchiTab1 DiffAdd
+highlight! default link TamagotchiTab2 DiffChange
+highlight! default link TamagotchiTab3 DiffDelete
+
+" color picker highlights - using terminal colors
+highlight! default link TamagotchiColorRed ErrorMsg
+highlight! default link TamagotchiColorGreen DiffAdd
+highlight! default link TamagotchiColorYellow WarningMsg
+highlight! default link TamagotchiColorBlue Function
+highlight! default link TamagotchiColorMagenta Constant
+highlight! default link TamagotchiColorCyan Type
+highlight! default link TamagotchiColorWhite Normal
 
 if exists('g:loaded_tamagotchi')
   finish

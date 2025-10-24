@@ -3,19 +3,18 @@ local lucy_sprites = require("tamagotchi.sprites.lucy")
 local doggo_sprites = require("tamagotchi.sprites.doggo")
 local bunny_sprites = require("tamagotchi.sprites.bunny")
 local dragon_sprites = require("tamagotchi.sprites.dragon")
-local bear_sprites = require("tamagotchi.sprites.bear")
 
 local M = {}
 
 M.defaults = {
     window_toggle_keybind = "<leader>tg",
     tick_length_ms = 1000, -- 1 second per tick (more reasonable than 100ms)
-    default_pet = "Lucy",
+    default_pet = "Sasha",
     pets = {
         {
             name = "Bunny",
 
-            sprite_update_interval = 4,
+            sprite_update_interval = 2,
             sprites = bunny_sprites,
 
             initial_mood = 75,
@@ -39,7 +38,7 @@ M.defaults = {
         {
             name = "Churro",
 
-            sprite_update_interval = 5,
+            sprite_update_interval = 2,
             sprites = doggo_sprites,
 
             initial_mood = 80,
@@ -63,7 +62,7 @@ M.defaults = {
         {
             name = "Dragon",
 
-            sprite_update_interval = 7,
+            sprite_update_interval = 3,
             sprites = dragon_sprites,
 
             initial_mood = 65,
@@ -85,57 +84,9 @@ M.defaults = {
         },
 
         {
-            name = "Grizz",
-
-            sprite_update_interval = 6,
-            sprites = bear_sprites,
-
-            initial_mood = 70,
-            initial_satiety = 85,
-            decay_speed = 2, -- Bears need lots of food
-
-            vim_events = {
-                {
-                    name = "BufWritePost",
-                    mood_increment = 3,
-                    satiety_increment = 7,
-                },
-                {
-                    name = "TextYankPost",
-                    mood_increment = 4,
-                    satiety_increment = 2,
-                },
-            },
-        },
-
-        {
-            name = "Kitty",
-
-            sprite_update_interval = 5,
-            sprites = kitty_sprites,
-
-            initial_mood = 75,
-            initial_satiety = 75,
-            decay_speed = 2, -- Moderate decay
-
-            vim_events = {
-                {
-                    name = "BufWritePost",
-                    mood_increment = 5,
-                    satiety_increment = 3,
-                },
-                {
-                    name = "TextYankPost",
-                    mood_increment = 2,
-                    satiety_increment = 1,
-                },
-            },
-        },
-
-        {
             name = "Lucy",
 
-            sprite_update_interval = 6,
+            sprite_update_interval = 3,
             sprites = lucy_sprites,
 
             initial_mood = 70,
@@ -157,25 +108,25 @@ M.defaults = {
         },
 
         {
-            name = "Po",
+            name = "Sasha",
 
-            sprite_update_interval = 6,
-            sprites = require("tamagotchi.sprites.po"),
+            sprite_update_interval = 2,
+            sprites = kitty_sprites,
 
-            initial_mood = 80,
-            initial_satiety = 90,
-            decay_speed = 2, -- Pandas love to eat
+            initial_mood = 75,
+            initial_satiety = 75,
+            decay_speed = 2, -- Moderate decay
 
             vim_events = {
                 {
                     name = "BufWritePost",
-                    mood_increment = 4,
-                    satiety_increment = 8,
+                    mood_increment = 5,
+                    satiety_increment = 3,
                 },
                 {
                     name = "TextYankPost",
-                    mood_increment = 3,
-                    satiety_increment = 4,
+                    mood_increment = 2,
+                    satiety_increment = 1,
                 },
             },
         },

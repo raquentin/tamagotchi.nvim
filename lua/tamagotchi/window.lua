@@ -5,6 +5,40 @@ M.current_window = nil
 M.refresh_timer = nil
 M.current_pet = nil
 
+-- color theme mapping to highlight groups
+local COLOR_THEME_MAP = {
+    red = "TamagotchiColorRed",
+    green = "TamagotchiColorGreen",
+    yellow = "TamagotchiColorYellow",
+    blue = "TamagotchiColorBlue",
+    magenta = "TamagotchiColorMagenta",
+    cyan = "TamagotchiColorCyan",
+    white = "TamagotchiColorWhite",
+}
+
+-- get tabs with dynamic colors based on pet's color theme
+local function get_tabs(pet)
+    local base_hl = "TamagotchiTab1"
+    if pet and pet.color_theme and COLOR_THEME_MAP[pet.color_theme] then
+        base_hl = COLOR_THEME_MAP[pet.color_theme]
+    end
+    
+    return {
+        {
+            label = "pet [m]enu",
+            hl_group = base_hl,
+        },
+        {
+            label = "[s]ettings",
+            hl_group = base_hl,
+        },
+        {
+            label = "[r]eset",
+            hl_group = base_hl,
+        },
+    }
+end
+
 local function ascii_bar(value, max, width)
     assert(value >= 0, "value must be non-negative")
     assert(max > 0, "max must be positive")
@@ -51,10 +85,10 @@ local function build_top_lines(pet, width, height, sprite_override)
 
     -- prepare info lines
     local info_lines = {
-        ("Name:    %s"):format(pet.name),
-        ("Age:     %s"):format(pet:get_age_formatted()),
-        ("Satiety: %s"):format(ascii_bar(pet:get_satiety(), 100, 10)),
-        ("Mood:    %s"):format(ascii_bar(pet:get_mood(), 100, 10)),
+        ("name:    %s"):format(pet.name),
+        ("age:     %s"):format(pet:get_age_formatted()),
+        ("satiety: %s"):format(ascii_bar(pet:get_satiety(), 100, 10)),
+        ("mood:    %s"):format(ascii_bar(pet:get_mood(), 100, 10)),
     }
 
     local lines_count = math.max(#sprite_lines, #info_lines, content_height)
@@ -145,6 +179,44 @@ local function highlight_bottom_bar(buf, line_num, tabs, width)
     end
 end
 
+-- highlight the sprite with the pet's color theme
+local function highlight_sprite(buf, pet, sprite_text, height)
+    if not pet or not pet.color_theme then return end
+    
+    local color_hl = COLOR_THEME_MAP[pet.color_theme]
+    if not color_hl then return end
+    
+    -- calculate sprite dimensions
+    local sprite_lines = {}
+    local sprite_width = 0
+    for line in (sprite_text .. "\n"):gmatch("(.-)\n") do
+        table.insert(sprite_lines, line)
+        if #line > sprite_width then sprite_width = #line end
+    end
+    
+    -- highlight each sprite line
+    -- sprites start at line 1 (after the blank line at 0) with PAD=1 offset
+    local PAD = 1
+    for i, sprite_line in ipairs(sprite_lines) do
+        if sprite_line ~= "" then
+            local line_idx = i -- line index in buffer (1-based, line 0 is blank)
+            -- calculate actual sprite position in centered layout
+            local padding_left = PAD + math.floor((sprite_width - #sprite_line) / 2)
+            local start_col = padding_left
+            local end_col = start_col + #sprite_line
+            
+            vim.api.nvim_buf_add_highlight(
+                buf,
+                0,
+                color_hl,
+                line_idx,
+                start_col,
+                end_col
+            )
+        end
+    end
+end
+
 local function build_final_lines(pet, width, height, sprite_override, tabs)
     local top_lines = build_top_lines(pet, width, height, sprite_override)
 
@@ -220,43 +292,57 @@ function M.open(pet)
 
     local buf = M.current_window.buf
 
+    vim.api.nvim_buf_set_keymap(buf, "n", "m", "", {
+        nowait = true,
+        noremap = true,
+        silent = true,
+        callback = function() require("tamagotchi.menu").open_pet_menu() end,
+    })
     vim.api.nvim_buf_set_keymap(buf, "n", "M", "", {
         nowait = true,
         noremap = true,
         silent = true,
         callback = function() require("tamagotchi.menu").open_pet_menu() end,
     })
-    vim.api.nvim_buf_set_keymap(buf, "n", "I", "", {
+    vim.api.nvim_buf_set_keymap(buf, "n", "s", "", {
         nowait = true,
         noremap = true,
         silent = true,
         callback = function()
-            require("tamagotchi.info").show_info(_G.tamagotchi_pet)
+            require("tamagotchi.settings").show_settings(_G.tamagotchi_pet)
         end,
     })
-    vim.api.nvim_buf_set_keymap(buf, "n", "R", "", {
+    vim.api.nvim_buf_set_keymap(buf, "n", "S", "", {
+        nowait = true,
+        noremap = true,
+        silent = true,
+        callback = function()
+            require("tamagotchi.settings").show_settings(_G.tamagotchi_pet)
+        end,
+    })
+    vim.api.nvim_buf_set_keymap(buf, "n", "r", "", {
         nowait = true,
         noremap = true,
         silent = true,
         callback = function()
             local dialogue = require("tamagotchi.dialogue")
             dialogue.choice(
-                "Reset Options",
-                "What would you like to reset?",
-                "Reset Current Pet Only",
-                "Reset All Pets (Delete All Saves)",
+                "reset options",
+                "what would you like to reset?",
+                "reset current pet only",
+                "reset all pets (delete all saves)",
                 function()
                     -- reset current pet only
                     dialogue.confirm(
-                        "Reset Current Pet",
-                        "Are you sure you want to reset "
+                        "reset current pet",
+                        "are you sure you want to reset "
                             .. (_G.tamagotchi_pet.name or "your pet")
-                            .. "? This will reset all stats and age to initial values.",
+                            .. "? this will reset all stats and age to initial values.",
                         function()
                             _G.tamagotchi_pet:reset()
                             _G.tamagotchi_pet:save_on_vim_close()
                             vim.notify(
-                                "Pet has been reset!",
+                                "pet has been reset!",
                                 vim.log.levels.INFO
                             )
                         end,
@@ -266,8 +352,8 @@ function M.open(pet)
                 function()
                     -- reset all pets (delete all save files)
                     dialogue.confirm(
-                        "Reset All Pets",
-                        "Are you ABSOLUTELY SURE you want to delete ALL pet save files? This cannot be undone!",
+                        "reset all pets",
+                        "are you ABSOLUTELY SURE you want to delete ALL pet save files? this cannot be undone!",
                         function()
                             local data_dir = vim.fn.stdpath("data")
                             local config = require("tamagotchi.config").values
@@ -297,7 +383,7 @@ function M.open(pet)
                             _G.tamagotchi_pet:save_on_vim_close()
 
                             vim.notify(
-                                "Deleted "
+                                "deleted "
                                     .. deleted_count
                                     .. " save file(s) and reset current pet!",
                                 vim.log.levels.WARN
@@ -306,44 +392,6 @@ function M.open(pet)
                         nil
                     )
                 end
-            )
-        end,
-    })
-    vim.api.nvim_buf_set_keymap(buf, "n", "N", "", {
-        nowait = true,
-        noremap = true,
-        silent = true,
-        callback = function()
-            local dialogue = require("tamagotchi.dialogue")
-            local current_pet = _G.tamagotchi_pet
-            dialogue.input(
-                "Rename Pet",
-                "Enter a new name for your pet:",
-                current_pet.name,
-                function(new_name)
-                    local old_name = current_pet.name
-                    local old_save_path = current_pet:get_save_path()
-
-                    current_pet:set_name(new_name)
-                    current_pet:save_on_vim_close()
-
-                    if
-                        old_name ~= new_name
-                        and vim.fn.filereadable(old_save_path) == 1
-                    then
-                        vim.fn.delete(old_save_path)
-                    end
-
-                    vim.notify(
-                        string.format(
-                            "Renamed pet from '%s' to '%s'!",
-                            old_name,
-                            new_name
-                        ),
-                        vim.log.levels.INFO
-                    )
-                end,
-                nil
             )
         end,
     })
@@ -382,13 +430,18 @@ function M.update_ui(pet, update_sprite)
 
     if update_sprite then M.last_sprite = pet:get_sprite() end
 
+    local tabs = get_tabs(pet)
+    local sprite_to_use = M.last_sprite or ""
     local final_lines =
-        build_final_lines(pet, width, height, M.last_sprite or "", M.tabs)
+        build_final_lines(pet, width, height, sprite_to_use, tabs)
 
     vim.api.nvim_buf_set_lines(M.current_window.buf, 0, -1, false, final_lines)
 
+    -- highlight the sprite with the pet's color
+    highlight_sprite(M.current_window.buf, pet, sprite_to_use, height)
+    
     local bottom_line_idx = #final_lines - 1
-    highlight_bottom_bar(M.current_window.buf, bottom_line_idx, M.tabs, width)
+    highlight_bottom_bar(M.current_window.buf, bottom_line_idx, tabs, width)
 end
 
 function M.toggle(pet)
@@ -454,20 +507,16 @@ end
 
 M.tabs = {
     {
-        label = "Pet [M]enu",
+        label = "pet [m]enu",
         hl_group = "TamagotchiTab1",
     },
     {
-        label = "More [I]nfo",
+        label = "[s]ettings",
         hl_group = "TamagotchiTab2",
     },
     {
-        label = "Re[n]ame",
+        label = "[r]eset",
         hl_group = "TamagotchiTab3",
-    },
-    {
-        label = "[R]eset",
-        hl_group = "TamagotchiTab4",
     },
 }
 

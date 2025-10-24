@@ -83,7 +83,7 @@ function M.open_pet_ui()
     if _G.tamagotchi_pet then
         window.open(_G.tamagotchi_pet)
     else
-        vim.notify("No active pet to display.", vim.log.levels.ERROR)
+        vim.notify("no active pet to display.", vim.log.levels.ERROR)
     end
 end
 

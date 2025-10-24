@@ -3,15 +3,13 @@ local M = {}
 -- Show a yes/no confirmation dialogue
 function M.confirm(title, message, on_yes, on_no)
     local lines = {}
-    table.insert(lines, "╔" .. string.rep("═", 50) .. "╗")
-    table.insert(
-        lines,
-        "║ " .. title .. string.rep(" ", 49 - #title) .. "║"
-    )
-    table.insert(lines, "╠" .. string.rep("═", 50) .. "╣")
+    local title_line_idx = 1
+    table.insert(lines, "")
+    table.insert(lines, "  " .. title)
+    table.insert(lines, "")
 
-    -- Wrap message into multiple lines if needed
-    local max_width = 48
+    -- wrap message into multiple lines if needed
+    local max_width = 46
     local words = {}
     for word in message:gmatch("%S+") do
         table.insert(words, word)
@@ -25,36 +23,21 @@ function M.confirm(title, message, on_yes, on_no)
                 .. word
         else
             if current_line ~= "" then
-                table.insert(
-                    lines,
-                    "║ "
-                        .. current_line
-                        .. string.rep(" ", max_width - #current_line)
-                        .. " ║"
-                )
+                table.insert(lines, "  " .. current_line)
             end
             current_line = word
         end
     end
     if current_line ~= "" then
-        table.insert(
-            lines,
-            "║ "
-                .. current_line
-                .. string.rep(" ", max_width - #current_line)
-                .. " ║"
-        )
+        table.insert(lines, "  " .. current_line)
     end
 
-    table.insert(lines, "╠" .. string.rep("═", 50) .. "╣")
-    table.insert(lines, "║" .. string.rep(" ", 50) .. "║")
-    table.insert(
-        lines,
-        "║     [Y]es              [N]o                      ║"
-    )
-    table.insert(lines, "╚" .. string.rep("═", 50) .. "╝")
+    table.insert(lines, "")
+    local options_line_idx = #lines
+    table.insert(lines, "  [y]es    [n]o")
+    table.insert(lines, "")
 
-    local width = 52
+    local width = 50
     local height = #lines
     local buf = vim.api.nvim_create_buf(false, true)
 
@@ -69,7 +52,7 @@ function M.confirm(title, message, on_yes, on_no)
         row = math.floor((win_height - height) / 2),
         col = math.floor((win_width - width) / 2),
         style = "minimal",
-        border = "none",
+        border = "rounded",
     }
 
     local win = vim.api.nvim_open_win(buf, true, opts)
@@ -77,6 +60,9 @@ function M.confirm(title, message, on_yes, on_no)
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
     vim.api.nvim_buf_set_option(buf, "modifiable", false)
     vim.api.nvim_buf_set_option(buf, "buftype", "nofile")
+
+    -- add highlights: options in gray
+    vim.api.nvim_buf_add_highlight(buf, -1, "Comment", options_line_idx, 0, -1)
 
     -- Set up key mappings
     local function close_and_call(callback)
@@ -116,69 +102,66 @@ end
 -- Show a choice dialogue with custom options
 function M.choice(title, message, option1, option2, on_option1, on_option2)
     local lines = {}
-    table.insert(lines, "╔" .. string.rep("═", 60) .. "╗")
-    table.insert(
-        lines,
-        "║ " .. title .. string.rep(" ", 59 - #title) .. "║"
-    )
-    table.insert(lines, "╠" .. string.rep("═", 60) .. "╣")
+    local title_line_idx = 1
+    table.insert(lines, "")
+    table.insert(lines, "  " .. title)
+    table.insert(lines, "")
 
-    -- Wrap message into multiple lines
-    local max_width = 58
-    local words = {}
-    for word in message:gmatch("%S+") do
-        table.insert(words, word)
+    -- split message by newlines first
+    local paragraphs = {}
+    for paragraph in (message .. "\n"):gmatch("(.-)\n") do
+        table.insert(paragraphs, paragraph)
     end
 
-    local current_line = ""
-    for _, word in ipairs(words) do
-        if #current_line + #word + 1 <= max_width then
-            current_line = current_line
-                .. (current_line == "" and "" or " ")
-                .. word
-        else
-            if current_line ~= "" then
-                table.insert(
-                    lines,
-                    "║ "
-                        .. current_line
-                        .. string.rep(" ", max_width - #current_line)
-                        .. " ║"
-                )
+    local note_lines = {}
+    -- wrap each paragraph into multiple lines
+    local max_width = 56
+    for _, para in ipairs(paragraphs) do
+        if para ~= "" then
+            local words = {}
+            for word in para:gmatch("%S+") do
+                table.insert(words, word)
             end
-            current_line = word
+
+            local current_line = ""
+            for _, word in ipairs(words) do
+                if #current_line + #word + 1 <= max_width then
+                    current_line = current_line
+                        .. (current_line == "" and "" or " ")
+                        .. word
+                else
+                    if current_line ~= "" then
+                        local line_text = "  " .. current_line
+                        table.insert(lines, line_text)
+                        -- track if this line starts with "note:"
+                        if current_line:match("^note:") then
+                            table.insert(note_lines, #lines - 1)
+                        end
+                    end
+                    current_line = word
+                end
+            end
+            if current_line ~= "" then
+                local line_text = "  " .. current_line
+                table.insert(lines, line_text)
+                -- track if this line starts with "note:"
+                if current_line:match("^note:") then
+                    table.insert(note_lines, #lines - 1)
+                end
+            end
+        else
+            table.insert(lines, "")
         end
     end
-    if current_line ~= "" then
-        table.insert(
-            lines,
-            "║ "
-                .. current_line
-                .. string.rep(" ", max_width - #current_line)
-                .. " ║"
-        )
-    end
 
-    table.insert(lines, "╠" .. string.rep("═", 60) .. "╣")
-    table.insert(lines, "║" .. string.rep(" ", 60) .. "║")
+    table.insert(lines, "")
+    table.insert(lines, "  [1] " .. option1)
+    table.insert(lines, "  [2] " .. option2)
+    table.insert(lines, "")
+    table.insert(lines, "  press [esc] to cancel")
+    table.insert(lines, "")
 
-    -- Format options
-    local opt1_text = string.format("[1] %s", option1)
-    local opt2_text = string.format("[2] %s", option2)
-    local padding = 60 - #opt1_text - #opt2_text - 2
-    table.insert(
-        lines,
-        "║ " .. opt1_text .. string.rep(" ", padding) .. opt2_text .. " ║"
-    )
-
-    table.insert(lines, "║" .. string.rep(" ", 60) .. "║")
-    table.insert(
-        lines,
-        "║ Press [Esc] to cancel" .. string.rep(" ", 38) .. "║"
-    )
-    table.insert(lines, "╚" .. string.rep("═", 60) .. "╝")
-
-    local width = 62
+    local width = 60
     local height = #lines
     local buf = vim.api.nvim_create_buf(false, true)
 
@@ -193,7 +176,7 @@ function M.choice(title, message, option1, option2, on_option1, on_option2)
         row = math.floor((win_height - height) / 2),
         col = math.floor((win_width - width) / 2),
         style = "minimal",
-        border = "none",
+        border = "rounded",
     }
 
     local win = vim.api.nvim_open_win(buf, true, opts)
@@ -201,6 +184,11 @@ function M.choice(title, message, option1, option2, on_option1, on_option2)
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
     vim.api.nvim_buf_set_option(buf, "modifiable", false)
     vim.api.nvim_buf_set_option(buf, "buftype", "nofile")
+
+    -- add highlights: "note:" lines in gray
+    for _, line_idx in ipairs(note_lines) do
+        vim.api.nvim_buf_add_highlight(buf, -1, "Comment", line_idx, 0, -1)
+    end
 
     local function close_and_call(callback)
         vim.api.nvim_win_close(win, true)
@@ -231,15 +219,12 @@ function M.input(title, message, default_value, on_submit, on_cancel)
     default_value = default_value or ""
 
     local lines = {}
-    table.insert(lines, "╔" .. string.rep("═", 50) .. "╗")
-    table.insert(
-        lines,
-        "║ " .. title .. string.rep(" ", 49 - #title) .. "║"
-    )
-    table.insert(lines, "╠" .. string.rep("═", 50) .. "╣")
+    table.insert(lines, "")
+    table.insert(lines, "  " .. title)
+    table.insert(lines, "")
 
-    -- Wrap message into multiple lines if needed
-    local max_width = 48
+    -- wrap message into multiple lines if needed
+    local max_width = 46
     local words = {}
     for word in message:gmatch("%S+") do
         table.insert(words, word)
@@ -253,36 +238,20 @@ function M.input(title, message, default_value, on_submit, on_cancel)
                 .. word
         else
             if current_line ~= "" then
-                table.insert(
-                    lines,
-                    "║ "
-                        .. current_line
-                        .. string.rep(" ", max_width - #current_line)
-                        .. " ║"
-                )
+                table.insert(lines, "  " .. current_line)
             end
             current_line = word
         end
     end
     if current_line ~= "" then
-        table.insert(
-            lines,
-            "║ "
-                .. current_line
-                .. string.rep(" ", max_width - #current_line)
-                .. " ║"
-        )
+        table.insert(lines, "  " .. current_line)
     end
 
-    table.insert(lines, "╠" .. string.rep("═", 50) .. "╣")
-    table.insert(lines, "║" .. string.rep(" ", 50) .. "║")
-    table.insert(
-        lines,
-        "║ Press [Enter] to confirm, [Esc] to cancel       ║"
-    )
-    table.insert(lines, "╚" .. string.rep("═", 50) .. "╝")
+    table.insert(lines, "")
+    table.insert(lines, "  press [enter] to confirm, [esc] to cancel")
+    table.insert(lines, "")
 
-    local width = 52
+    local width = 50
     local height = #lines
     local buf = vim.api.nvim_create_buf(false, true)
 
@@ -297,7 +266,7 @@ function M.input(title, message, default_value, on_submit, on_cancel)
         row = math.floor((win_height - height) / 2),
         col = math.floor((win_width - width) / 2),
         style = "minimal",
-        border = "none",
+        border = "rounded",
     }
 
     local win = vim.api.nvim_open_win(buf, true, opts)

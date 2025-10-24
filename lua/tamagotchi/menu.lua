@@ -1,10 +1,5 @@
 local menu = {}
 
-local pickers = require("telescope.pickers")
-local finders = require("telescope.finders")
-local previewers = require("telescope.previewers")
-local conf = require("telescope.config").values
-
 local window = require("tamagotchi.window")
 local Pet = require("tamagotchi.pet")
 
@@ -13,148 +8,282 @@ local function get_all_pets()
     return config.pets or {}
 end
 
--- custom previewer that draws the sprite in the preview buffer
-local function make_pet_previewer()
-    return previewers.new_buffer_previewer({
-        define_preview = function(self, entry, status)
-            local bufnr = self.state.bufnr
-            vim.api.nvim_buf_set_option(bufnr, "modifiable", true)
+-- fuzzy match function
+local function fuzzy_match(str, pattern)
+    if pattern == "" then return true end
+    
+    local pattern_idx = 1
+    local pattern_len = #pattern
+    local str_lower = str:lower()
+    local pattern_lower = pattern:lower()
+    
+    for i = 1, #str_lower do
+        if str_lower:sub(i, i) == pattern_lower:sub(pattern_idx, pattern_idx) then
+            pattern_idx = pattern_idx + 1
+            if pattern_idx > pattern_len then
+                return true
+            end
+        end
+    end
+    
+    return pattern_idx > pattern_len
+end
 
-            -- entry.value is whichever item is under cursor in the results
-            local pet_def = entry.value
-            local pet_obj = Pet:new({
-                name = pet_def.name,
-                sprites = pet_def.sprites or {},
-                mood = 80, -- or load from disk if you want
-                satiety = 80, -- ...
-            })
+function menu.open_pet_menu()
+    -- close the main tamagotchi window if open
+    local current_pet = window.get_current_pet()
+    if current_pet then window.close(current_pet) end
 
-            -- grab the current sprite frame text
-            local sprite = pet_obj:get_sprite()
+    local pets_list = get_all_pets()
+    if #pets_list == 0 then
+        vim.notify("no pets found!", vim.log.levels.WARN)
+        return
+    end
 
-            -- set lines in preview buffer
+    -- state
+    local state = {
+        pets = pets_list,
+        filtered_pets = pets_list,
+        selected_idx = 1,
+        query = "",
+        preview_pet = nil,
+        preview_frame = 1,
+        animation_timer = nil,
+    }
+
+    -- create floating window
+    local width = 50
+    local height = 16
+    local buf = vim.api.nvim_create_buf(false, true)
+    
+    local ui = vim.api.nvim_list_uis()[1]
+    local win_width = ui.width
+    local win_height = ui.height
+    
+    local opts = {
+        relative = "editor",
+        width = width,
+        height = height,
+        row = math.floor((win_height - height) / 2),
+        col = math.floor((win_width - width) / 2),
+        style = "minimal",
+        border = "rounded",
+    }
+    
+    local win = vim.api.nvim_open_win(buf, true, opts)
+    vim.api.nvim_buf_set_option(buf, "modifiable", true)
+    vim.api.nvim_buf_set_option(buf, "buftype", "nofile")
+    
+    -- render function
+    local function render()
+        local lines = {}
+        
+        -- title
+        table.insert(lines, "  select a pet")
+        table.insert(lines, "")
+        
+        -- pet list (left side, takes ~25 chars)
+        local list_start = #lines
+        local visible_count = math.min(8, #state.filtered_pets)
+        
+        for i = 1, visible_count do
+            local pet = state.filtered_pets[i]
+            local marker = (i == state.selected_idx) and "> " or "  "
+            table.insert(lines, marker .. pet.name)
+        end
+        
+        -- pad list section
+        while #lines < list_start + 8 do
+            table.insert(lines, "")
+        end
+        
+        -- preview sprite (right side)
+        if state.preview_pet then
+            local sprite = state.preview_pet:get_sprite()
             local sprite_lines = {}
             for line in (sprite .. "\n"):gmatch("(.-)\n") do
                 table.insert(sprite_lines, line)
             end
-
-            -- clear old lines and set new lines
-            vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, sprite_lines)
-
-            vim.api.nvim_buf_set_option(bufnr, "modifiable", false)
-        end,
-    })
-end
-
-function menu.open_pet_menu()
-    -- 1) Close the main tamagotchi window if open
-    local current_pet = window.get_current_pet() -- Implement `get_current_pet()` appropriately
-    if current_pet then window.close(current_pet) end
-
-    -- 2) Gather the list of pets
-    local pets_list = get_all_pets()
-    if #pets_list == 0 then
-        vim.notify("No pets found!", vim.log.levels.WARN)
-        return
+            
+            -- overlay sprite on right side of list lines
+            local sprite_offset = 22
+            for i, sprite_line in ipairs(sprite_lines) do
+                local list_line_idx = list_start + i
+                if list_line_idx <= #lines then
+                    local current_line = lines[list_line_idx]
+                    -- pad current line to sprite offset
+                    if #current_line < sprite_offset then
+                        current_line = current_line .. string.rep(" ", sprite_offset - #current_line)
+                    end
+                    lines[list_line_idx] = current_line .. sprite_line
+                end
+            end
+        end
+        
+        -- bottom section
+        table.insert(lines, "")
+        table.insert(lines, string.rep("─", width - 2))
+        table.insert(lines, "  search: " .. state.query .. "▊")
+        table.insert(lines, "")
+        table.insert(lines, "  [↑↓] nav  [enter] select  [esc] cancel")
+        
+        vim.api.nvim_buf_set_option(buf, "modifiable", true)
+        vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+        vim.api.nvim_buf_set_option(buf, "modifiable", false)
+        
+        -- apply highlights
+        vim.api.nvim_buf_add_highlight(buf, -1, "Comment", 0, 0, -1)
+        if state.selected_idx > 0 and state.selected_idx <= visible_count then
+            vim.api.nvim_buf_add_highlight(
+                buf,
+                -1,
+                "Visual",
+                list_start + state.selected_idx - 1,
+                0,
+                -1
+            )
+        end
+        
+        -- highlight sprite if color theme is set
+        if state.preview_pet and state.preview_pet.color_theme then
+            local color_map = {
+                red = "TamagotchiColorRed",
+                green = "TamagotchiColorGreen",
+                yellow = "TamagotchiColorYellow",
+                blue = "TamagotchiColorBlue",
+                magenta = "TamagotchiColorMagenta",
+                cyan = "TamagotchiColorCyan",
+                white = "TamagotchiColorWhite",
+            }
+            local color_hl = color_map[state.preview_pet.color_theme]
+            if color_hl then
+                local sprite = state.preview_pet:get_sprite()
+                local sprite_lines = {}
+                for line in (sprite .. "\n"):gmatch("(.-)\n") do
+                    table.insert(sprite_lines, line)
+                end
+                
+                local sprite_offset = 22
+                for i, sprite_line in ipairs(sprite_lines) do
+                    if sprite_line ~= "" then
+                        local line_idx = list_start + i - 1
+                        vim.api.nvim_buf_add_highlight(
+                            buf,
+                            -1,
+                            color_hl,
+                            line_idx,
+                            sprite_offset,
+                            sprite_offset + #sprite_line
+                        )
+                    end
+                end
+            end
+        end
+        
+        vim.api.nvim_buf_add_highlight(buf, -1, "Comment", #lines - 1, 0, -1)
     end
-
-    -- 3) Define the telescope picker with horizontal layout
-    pickers
-        .new({
-            prompt_title = "Select a Pet",
-            finder = finders.new_table({
-                results = pets_list,
-                entry_maker = function(pet_def)
-                    return {
-                        value = pet_def,
-                        display = pet_def.name,
-                        ordinal = pet_def.name, -- for fuzzy searching by name
-                    }
-                end,
-            }),
-            previewer = make_pet_previewer(),
-
-            sorter = conf.generic_sorter(),
-            layout_strategy = "horizontal",
-            layout_config = {
-                width = 0.5,
-                height = 0.5,
-                preview_width = 0.35,
-                prompt_position = "bottom",
-                horizontal = {
-                    mirror = false, -- Preview on the right
-                },
-            },
-            preview_cutoff = 0, -- Always show preview regardless of window size
-            attach_mappings = function(prompt_bufnr, map)
-                -- When user confirms ( <CR> ), pick that pet
-                local actions = require("telescope.actions")
-                local action_state = require("telescope.actions.state")
-
-                local select_pet = function()
-                    local selection = action_state.get_selected_entry()
-                    actions.close(prompt_bufnr)
-
-                    if not selection then return end
-
-                    local chosen_pet_def = selection.value
+    
+    -- update preview pet
+    local function update_preview()
+        if #state.filtered_pets > 0 and state.selected_idx <= #state.filtered_pets then
+            local pet_def = state.filtered_pets[state.selected_idx]
+            state.preview_pet = Pet:new({
+                name = pet_def.name,
+                sprites = pet_def.sprites or {},
+                sprite_update_interval = pet_def.sprite_update_interval or 2,
+                mood = 80,
+                satiety = 80,
+            })
+        else
+            state.preview_pet = nil
+        end
+    end
+    
+    -- filter pets based on query
+    local function update_filter()
+        state.filtered_pets = {}
+        for _, pet in ipairs(state.pets) do
+            if fuzzy_match(pet.name, state.query) then
+                table.insert(state.filtered_pets, pet)
+            end
+        end
+        
+        -- adjust selection
+        if state.selected_idx > #state.filtered_pets then
+            state.selected_idx = math.max(1, #state.filtered_pets)
+        end
+        
+        update_preview()
+        render()
+    end
+    
+    -- start animation timer
+    state.animation_timer = vim.loop.new_timer()
+    state.animation_timer:start(0, 1000, vim.schedule_wrap(function()
+        if state.preview_pet and vim.api.nvim_win_is_valid(win) then
+            -- get_sprite() advances the frame, so just call it to animate
+            state.preview_pet:get_sprite()
+            render()
+        end
+    end))
+    
+    -- handle selection
+    local function select_pet()
+        if state.animation_timer then
+            state.animation_timer:stop()
+            state.animation_timer:close()
+        end
+        
+        if #state.filtered_pets == 0 then return end
+        
+        local chosen_pet_def = state.filtered_pets[state.selected_idx]
+        vim.api.nvim_win_close(win, true)
+        
                     local active_pet = _G.tamagotchi_pet
 
-                    -- If selecting the same pet, just reopen
-                    if
-                        active_pet
-                        and active_pet.name == chosen_pet_def.name
-                    then
+        -- if selecting the same pet, just reopen
+        if active_pet and active_pet.name == chosen_pet_def.name then
                         window.open(active_pet)
                         return
                     end
 
-                    -- If we have a current pet, ask what to do
+        -- if we have a current pet, ask what to do
                     if active_pet then
                         local dialogue = require("tamagotchi.dialogue")
                         dialogue.choice(
-                            "Switch Pet: " .. chosen_pet_def.name,
+                "switch pet: " .. chosen_pet_def.name,
                             string.format(
-                                "You currently have %s. Would you like to transfer progress "
-                                    .. "(just change appearance) or start a new pet life? "
-                                    .. "Note: Starting a new pet means you'll have both pets to care for.",
+                    "you currently have %s. would you like to transfer progress "
+                        .. "(just change appearance) or start a new pet life?\n\n"
+                        .. "note: you'll be caring for both pets independently.",
                                 active_pet.name
                             ),
-                            "Transfer Progress",
-                            "Start New Life",
+                "transfer progress",
+                "start new life",
                             function()
-                                -- Transfer progress option
+                    -- transfer progress option
                                 local new_pet = Pet:new(chosen_pet_def)
                                 current_pet:transfer_stats_to(new_pet)
                                 _G.tamagotchi_pet = new_pet
                                 new_pet:save_on_vim_close()
                                 vim.notify(
-                                    "Transferred progress to "
-                                        .. new_pet.name
-                                        .. "!",
+                        "transferred progress to " .. new_pet.name .. "!",
                                     vim.log.levels.INFO
                                 )
                                 window.open(new_pet)
                             end,
                             function()
-                                -- Start new life option
-                                -- Save current pet
+                    -- start new life option
                                 current_pet:save_on_vim_close()
 
-                                -- Try to load existing save for new pet, or create fresh
                                 local save_path = vim.fn.stdpath("data")
                                     .. "/tamagotchi_"
                                     .. chosen_pet_def.name
                                     .. ".json"
-                                local loaded_pet =
-                                    Pet.load_on_vim_open(save_path)
+                    local loaded_pet = Pet.load_on_vim_open(save_path)
 
                                 local new_pet
-                                if
-                                    loaded_pet
-                                    and loaded_pet.name
-                                        == chosen_pet_def.name
-                                then
+                    if loaded_pet and loaded_pet.name == chosen_pet_def.name then
                                     new_pet = loaded_pet
                                 else
                                     new_pet = Pet:new(chosen_pet_def)
@@ -162,14 +291,14 @@ function menu.open_pet_menu()
 
                                 _G.tamagotchi_pet = new_pet
                                 vim.notify(
-                                    "Started caring for " .. new_pet.name .. "!",
+                        "started caring for " .. new_pet.name .. "!",
                                     vim.log.levels.INFO
                                 )
                                 window.open(new_pet)
                             end
                         )
                     else
-                        -- No current pet, just load or create
+            -- no current pet, just load or create
                         local save_path = vim.fn.stdpath("data")
                             .. "/tamagotchi_"
                             .. chosen_pet_def.name
@@ -177,10 +306,7 @@ function menu.open_pet_menu()
                         local loaded_pet = Pet.load_on_vim_open(save_path)
 
                         local chosen_pet
-                        if
-                            loaded_pet
-                            and loaded_pet.name == chosen_pet_def.name
-                        then
+            if loaded_pet and loaded_pet.name == chosen_pet_def.name then
                             chosen_pet = loaded_pet
                         else
                             chosen_pet = Pet:new(chosen_pet_def)
@@ -191,12 +317,126 @@ function menu.open_pet_menu()
                     end
                 end
 
-                map("i", "<CR>", function() select_pet() end)
-                map("n", "<CR>", function() select_pet() end)
-
-                return true
+    -- handle cancel
+    local function cancel()
+        if state.animation_timer then
+            state.animation_timer:stop()
+            state.animation_timer:close()
+        end
+        vim.api.nvim_win_close(win, true)
+    end
+    
+    -- key mappings
+    vim.api.nvim_buf_set_keymap(buf, "n", "<Up>", "", {
+        noremap = true,
+        silent = true,
+        callback = function()
+            if state.selected_idx > 1 then
+                state.selected_idx = state.selected_idx - 1
+                update_preview()
+                render()
+            end
+        end,
+    })
+    
+    vim.api.nvim_buf_set_keymap(buf, "n", "<Down>", "", {
+        noremap = true,
+        silent = true,
+        callback = function()
+            if state.selected_idx < #state.filtered_pets then
+                state.selected_idx = state.selected_idx + 1
+                update_preview()
+                render()
+            end
+        end,
+    })
+    
+    vim.api.nvim_buf_set_keymap(buf, "n", "k", "", {
+        noremap = true,
+        silent = true,
+        callback = function()
+            if state.selected_idx > 1 then
+                state.selected_idx = state.selected_idx - 1
+                update_preview()
+                render()
+            end
+        end,
+    })
+    
+    vim.api.nvim_buf_set_keymap(buf, "n", "j", "", {
+        noremap = true,
+        silent = true,
+        callback = function()
+            if state.selected_idx < #state.filtered_pets then
+                state.selected_idx = state.selected_idx + 1
+                update_preview()
+                render()
+            end
+        end,
+    })
+    
+    vim.api.nvim_buf_set_keymap(buf, "n", "<CR>", "", {
+        noremap = true,
+        silent = true,
+        callback = select_pet,
+    })
+    
+    vim.api.nvim_buf_set_keymap(buf, "n", "<Esc>", "", {
+        noremap = true,
+        silent = true,
+        callback = cancel,
+    })
+    
+    vim.api.nvim_buf_set_keymap(buf, "n", "q", "", {
+        noremap = true,
+        silent = true,
+        callback = cancel,
+    })
+    
+    -- enable insert mode for typing search
+    vim.api.nvim_buf_set_keymap(buf, "n", "i", "", {
+        noremap = true,
+        silent = true,
+        callback = function()
+            vim.ui.input({
+                prompt = "search: ",
+                default = state.query,
+            }, function(input)
+                if input then
+                    state.query = input
+                    update_filter()
+                end
+            end)
+        end,
+    })
+    
+    -- character input for fuzzy search
+    for char in ("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"):gmatch(".") do
+        vim.api.nvim_buf_set_keymap(buf, "n", char, "", {
+            noremap = true,
+            silent = true,
+            callback = function()
+                state.query = state.query .. char
+                update_filter()
             end,
         })
-        :find()
+    end
+    
+    -- backspace
+    vim.api.nvim_buf_set_keymap(buf, "n", "<BS>", "", {
+        noremap = true,
+        silent = true,
+        callback = function()
+            if #state.query > 0 then
+                state.query = state.query:sub(1, -2)
+                update_filter()
+            end
+        end,
+    })
+    
+    -- initial render
+    update_preview()
+    render()
 end
+
 return menu
