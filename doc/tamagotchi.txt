@@ -16,6 +16,7 @@ Table of Contents                               *tamagotchi-table-of-contents*
 is a configurable plugin for raising pets across Neovim sessions.
 
 
+https://github.com/user-attachments/assets/8462955d-ad6c-4499-9d9f-8265ba00fd0f
 
 
 FEATURES                            *tamagotchi-🐱-tamagotchi.nvim-features*
