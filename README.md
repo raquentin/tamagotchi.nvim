@@ -2,7 +2,7 @@
 
 is a configurable plugin for raising pets across Neovim sessions.
 
-<img width="750" height="275" alt="Screenshot 2025-10-17 at 11 09 41 PM" src="https://github.com/user-attachments/assets/9b4d5e4c-c882-414f-bb20-d4007d204f38" />
+https://github.com/user-attachments/assets/8462955d-ad6c-4499-9d9f-8265ba00fd0f
 
 ## Features
 - Floating Window UI: Displays your pet with sprite animations, stats, and a colored bottom bar with interactive tabs.
