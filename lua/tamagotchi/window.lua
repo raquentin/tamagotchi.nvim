@@ -256,15 +256,27 @@ local function highlight_sprite(buf, pet, sprite_text, width)
     local color_hl = COLOR_THEME_MAP[pet.color_theme]
     if not color_hl then return end
     
-    -- normalize sprite to get dimensions
+    -- normalize sprite to get dimensions (same as build_top_lines)
     local sprite_lines, sprite_width, sprite_height = normalize_sprite(sprite_text)
     
-    -- calculate left padding (same logic as build_top_lines)
-    local info_width = 30
+    -- calculate info width (exact same as build_top_lines)
+    local info_lines = {
+        ("name:    %s"):format(pet.name),
+        ("age:     %s"):format(pet:get_age_formatted()),
+        ("satiety: %s"):format(ascii_bar(pet:get_satiety(), 100, 10)),
+        ("mood:    %s"):format(ascii_bar(pet:get_mood(), 100, 10)),
+    }
+    local info_width = 0
+    for _, line in ipairs(info_lines) do
+        if #line > info_width then info_width = #line end
+    end
+    
+    -- calculate left padding (exact same logic as build_top_lines)
     local min_gap = 3
     local available_space = width - sprite_width - info_width
     local gap = math.max(min_gap, math.floor(available_space / 3))
-    local left_pad = math.floor((width - sprite_width - gap - info_width) / 2)
+    local total_padding = width - sprite_width - gap - info_width
+    local left_pad = math.floor(total_padding / 2)
     
     -- sprite starts at line 1 (after the top empty line at line 0)
     for i = 1, sprite_height do
@@ -623,7 +635,7 @@ function M.draw_bottom_bar(buf, line_num, tabs)
     end
 
     -- might want to add " | " between them:
-    local line_text = table.concat(segments, " | ")
+    local line_text = table.concat(segments, " |t ")
 
     -- set this line in the buffer
     vim.api.nvim_buf_set_lines(

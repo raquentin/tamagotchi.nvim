@@ -225,6 +225,9 @@ function Pet:reset()
     -- Reset sprite state
     self.sprite_indices = { happy = 1, hungry = 1, neutral = 1 }
     self.last_state = nil
+    
+    -- Reset UI customization
+    self.color_theme = nil
 end
 
 function Pet:transfer_stats_to(target_pet)
