@@ -8,7 +8,6 @@ local function get_all_pets()
     return config.pets or {}
 end
 
--- fuzzy match function
 local function fuzzy_match(str, pattern)
     if pattern == "" then return true end
     
@@ -30,7 +29,6 @@ local function fuzzy_match(str, pattern)
 end
 
 function menu.open_pet_menu()
-    -- close the main tamagotchi window if open
     local current_pet = window.get_current_pet()
     if current_pet then window.close(current_pet) end
 
@@ -40,7 +38,6 @@ function menu.open_pet_menu()
         return
     end
 
-    -- state
     local state = {
         pets = pets_list,
         filtered_pets = pets_list,
@@ -51,7 +48,6 @@ function menu.open_pet_menu()
         animation_timer = nil,
     }
 
-    -- create floating window
     local width = 50
     local height = 16
     local buf = vim.api.nvim_create_buf(false, true)
@@ -92,12 +88,10 @@ function menu.open_pet_menu()
             table.insert(lines, marker .. pet.name)
         end
         
-        -- pad list section
         while #lines < list_start + 8 do
             table.insert(lines, "")
         end
         
-        -- preview sprite (right side)
         if state.preview_pet then
             local sprite = state.preview_pet:get_sprite()
             local sprite_lines = {}
@@ -111,7 +105,6 @@ function menu.open_pet_menu()
                 local list_line_idx = list_start + i
                 if list_line_idx <= #lines then
                     local current_line = lines[list_line_idx]
-                    -- pad current line to sprite offset
                     if #current_line < sprite_offset then
                         current_line = current_line .. string.rep(" ", sprite_offset - #current_line)
                     end
@@ -120,7 +113,6 @@ function menu.open_pet_menu()
             end
         end
         
-        -- bottom section
         table.insert(lines, "")
         table.insert(lines, string.rep("─", width - 2))
         table.insert(lines, "  search: " .. state.query .. "▊")
@@ -131,7 +123,6 @@ function menu.open_pet_menu()
         vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
         vim.api.nvim_buf_set_option(buf, "modifiable", false)
         
-        -- apply highlights
         vim.api.nvim_buf_add_highlight(buf, -1, "Comment", 0, 0, -1)
         if state.selected_idx > 0 and state.selected_idx <= visible_count then
             vim.api.nvim_buf_add_highlight(
@@ -144,7 +135,6 @@ function menu.open_pet_menu()
             )
         end
         
-        -- highlight sprite if color theme is set
         if state.preview_pet and state.preview_pet.color_theme then
             local color_map = {
                 red = "TamagotchiColorRed",
@@ -199,7 +189,6 @@ function menu.open_pet_menu()
         end
     end
     
-    -- filter pets based on query
     local function update_filter()
         state.filtered_pets = {}
         for _, pet in ipairs(state.pets) do
@@ -208,7 +197,6 @@ function menu.open_pet_menu()
             end
         end
         
-        -- adjust selection
         if state.selected_idx > #state.filtered_pets then
             state.selected_idx = math.max(1, #state.filtered_pets)
         end
@@ -217,17 +205,14 @@ function menu.open_pet_menu()
         render()
     end
     
-    -- start animation timer
     state.animation_timer = vim.loop.new_timer()
     state.animation_timer:start(0, 1000, vim.schedule_wrap(function()
         if state.preview_pet and vim.api.nvim_win_is_valid(win) then
-            -- get_sprite() advances the frame, so just call it to animate
             state.preview_pet:get_sprite()
             render()
         end
     end))
     
-    -- handle selection
     local function select_pet()
         if state.animation_timer then
             state.animation_timer:stop()
@@ -239,15 +224,13 @@ function menu.open_pet_menu()
         local chosen_pet_def = state.filtered_pets[state.selected_idx]
         vim.api.nvim_win_close(win, true)
         
-                    local active_pet = _G.tamagotchi_pet
+        local active_pet = _G.tamagotchi_pet
 
-        -- if selecting the same pet, just reopen
         if active_pet and active_pet.name == chosen_pet_def.name then
                         window.open(active_pet)
                         return
                     end
 
-        -- if we have a current pet, ask what to do
                     if active_pet then
                         local dialogue = require("tamagotchi.dialogue")
                         dialogue.choice(
@@ -261,7 +244,6 @@ function menu.open_pet_menu()
                 "transfer progress",
                 "start new life",
                             function()
-                    -- transfer progress option
                                 local new_pet = Pet:new(chosen_pet_def)
                                 current_pet:transfer_stats_to(new_pet)
                                 _G.tamagotchi_pet = new_pet
@@ -273,7 +255,6 @@ function menu.open_pet_menu()
                                 window.open(new_pet)
                             end,
                             function()
-                    -- start new life option
                                 current_pet:save_on_vim_close()
 
                                 local save_path = vim.fn.stdpath("data")
@@ -298,7 +279,6 @@ function menu.open_pet_menu()
                             end
                         )
                     else
-            -- no current pet, just load or create
                         local save_path = vim.fn.stdpath("data")
                             .. "/tamagotchi_"
                             .. chosen_pet_def.name
@@ -314,10 +294,9 @@ function menu.open_pet_menu()
 
                         _G.tamagotchi_pet = chosen_pet
                         window.open(chosen_pet)
-                    end
                 end
+            end
 
-    -- handle cancel
     local function cancel()
         if state.animation_timer then
             state.animation_timer:stop()
@@ -326,7 +305,6 @@ function menu.open_pet_menu()
         vim.api.nvim_win_close(win, true)
     end
     
-    -- key mappings
     vim.api.nvim_buf_set_keymap(buf, "n", "<Up>", "", {
         noremap = true,
         silent = true,
@@ -393,7 +371,6 @@ function menu.open_pet_menu()
         callback = cancel,
     })
     
-    -- enable insert mode for typing search
     vim.api.nvim_buf_set_keymap(buf, "n", "i", "", {
         noremap = true,
         silent = true,
@@ -410,7 +387,6 @@ function menu.open_pet_menu()
         end,
     })
     
-    -- character input for fuzzy search
     for char in ("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"):gmatch(".") do
         vim.api.nvim_buf_set_keymap(buf, "n", char, "", {
             noremap = true,
@@ -434,7 +410,6 @@ function menu.open_pet_menu()
         end,
     })
     
-    -- initial render
     update_preview()
     render()
 end

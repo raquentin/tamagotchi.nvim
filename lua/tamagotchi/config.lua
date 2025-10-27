@@ -8,7 +8,7 @@ local M = {}
 
 M.defaults = {
     window_toggle_keybind = "<leader>tg",
-    tick_length_ms = 1000, -- 1 second per tick (more reasonable than 100ms)
+    tick_length_ms = 1000,
     default_pet = "Sasha",
     pets = {
         {
@@ -19,7 +19,7 @@ M.defaults = {
 
             initial_mood = 75,
             initial_satiety = 65,
-            decay_speed = 3, -- Bunnies are active
+            decay_speed = 3,
 
             vim_events = {
                 {
@@ -43,7 +43,7 @@ M.defaults = {
 
             initial_mood = 80,
             initial_satiety = 70,
-            decay_speed = 2, -- Dogs need regular walks
+            decay_speed = 2,
 
             vim_events = {
                 {
@@ -67,7 +67,7 @@ M.defaults = {
 
             initial_mood = 65,
             initial_satiety = 75,
-            decay_speed = 1, -- Dragons are hardy
+            decay_speed = 1,
 
             vim_events = {
                 {
@@ -91,7 +91,7 @@ M.defaults = {
 
             initial_mood = 70,
             initial_satiety = 80,
-            decay_speed = 3, -- Slightly faster decay
+            decay_speed = 3,
 
             vim_events = {
                 {
@@ -115,7 +115,7 @@ M.defaults = {
 
             initial_mood = 75,
             initial_satiety = 75,
-            decay_speed = 2, -- Moderate decay
+            decay_speed = 2,
 
             vim_events = {
                 {
@@ -238,9 +238,6 @@ function M.setup(user_config)
         table.insert(all_pets, pet)
     end
 
-    -- if user provided pets, mark them as immigrants and append them
-    -- users can add custom pets by passing pets array:
-    --   require('tamagotchi').setup({ pets = { { name = "Custom", sprites = ..., ... } } })
     if user_config.pets then
         for _, pet in ipairs(user_config.pets) do
             validate_pet(pet)
@@ -249,7 +246,6 @@ function M.setup(user_config)
         end
     end
 
-    -- sort pets alphabetically by name
     table.sort(all_pets, function(a, b) return a.name < b.name end)
 
     combined.pets = all_pets

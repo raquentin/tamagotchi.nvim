@@ -1,11 +1,9 @@
 local M = {}
 
--- track current open window, timer
 M.current_window = nil
 M.refresh_timer = nil
 M.current_pet = nil
 
--- color theme mapping to highlight groups
 local COLOR_THEME_MAP = {
     red = "TamagotchiColorRed",
     green = "TamagotchiColorGreen",
@@ -16,7 +14,6 @@ local COLOR_THEME_MAP = {
     white = "TamagotchiColorWhite",
 }
 
--- get tabs with dynamic colors based on pet's color theme
 local function get_tabs(pet)
     local base_hl = "TamagotchiTab1"
     if pet and pet.color_theme and COLOR_THEME_MAP[pet.color_theme] then
@@ -58,14 +55,12 @@ function M.center_text(text, width)
         "width must be a positive number"
     )
 
-    if #text >= width then return text:sub(1, width) end
+    if #text >= width then     return text:sub(1, width) end
     local left_pad = math.floor((width - #text) / 2)
     local right_pad = width - #text - left_pad
     return string.rep(" ", left_pad) .. text .. string.rep(" ", right_pad)
 end
 
--- builds the top layout (sprite left, attrs right)
--- normalize sprite to rectangular bounding box, trimming whitespace
 local function normalize_sprite(sprite_text)
     local lines = {}
     
@@ -73,7 +68,6 @@ local function normalize_sprite(sprite_text)
         table.insert(lines, line)
     end
     
-    -- find the actual content bounds (trim leading/trailing whitespace)
     local min_start = math.huge
     local max_end = 0
     
@@ -90,7 +84,6 @@ local function normalize_sprite(sprite_text)
         end
     end
     
-    -- if no content found, fallback to original behavior
     if min_start == math.huge then
         min_start = 1
         max_end = 0
@@ -101,15 +94,13 @@ local function normalize_sprite(sprite_text)
     
     local content_width = max_end - min_start + 1
     
-    -- extract and normalize the actual content
     local normalized = {}
     for _, line in ipairs(lines) do
-        local content = ""
-        if #line >= min_start then
-            content = line:sub(min_start, math.min(#line, max_end))
-        end
-        -- pad to content_width
-        if #content < content_width then
+            local content = ""
+            if #line >= min_start then
+                content = line:sub(min_start, math.min(#line, max_end))
+            end
+            if #content < content_width then
             local padding_needed = content_width - #content
             local left_pad = math.floor(padding_needed / 2)
             local right_pad = padding_needed - left_pad

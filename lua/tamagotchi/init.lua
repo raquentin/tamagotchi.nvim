@@ -8,12 +8,10 @@ function M.setup(user_config)
 
     local Pet = require("tamagotchi.pet")
 
-    -- Try to load existing pet, or create a new one
     local loaded_pet = Pet.load_on_vim_open()
     if loaded_pet then
         _G.tamagotchi_pet = loaded_pet
     else
-        -- Find pet definition by name or pick a random one
         local chosen_def = nil
         local desired_name = config.values.default_pet
 
@@ -26,7 +24,6 @@ function M.setup(user_config)
             end
         end
 
-        -- Fallback to random pet if no match found
         if not chosen_def then
             assert(
                 #config.values.pets > 0,
@@ -47,7 +44,6 @@ function M.setup(user_config)
         { noremap = true, silent = true }
     )
 
-    -- Link vim events to event handlers
     if _G.tamagotchi_pet.vim_events then
         for _, evt_def in ipairs(_G.tamagotchi_pet.vim_events) do
             vim.api.nvim_create_autocmd(evt_def.name, {
@@ -67,7 +63,6 @@ function M.setup(user_config)
         end
     end
 
-    -- Save pet state when exiting Vim
     vim.api.nvim_create_autocmd("VimLeavePre", {
         pattern = "*",
         callback = function()

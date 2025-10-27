@@ -1,19 +1,16 @@
 local Pet = {}
 Pet.__index = Pet
 
--- Map of "decay classes" -> probabilities per tick (0 is none, 6 is intense)
--- With 1-second ticks, these represent per-second decay chance
 local DECAY_CLASSES = {
-    [0] = { mood = 0.0, satiety = 0.0 }, -- No decay
-    [1] = { mood = 0.01, satiety = 0.01 }, -- Very slow: ~1% per second
-    [2] = { mood = 0.03, satiety = 0.03 }, -- Slow: ~3% per second
-    [3] = { mood = 0.05, satiety = 0.05 }, -- Moderate: ~5% per second
-    [4] = { mood = 0.08, satiety = 0.08 }, -- Fast: ~8% per second
-    [5] = { mood = 0.12, satiety = 0.12 }, -- Very fast: ~12% per second
-    [6] = { mood = 0.20, satiety = 0.20 }, -- Extreme: ~20% per second
+    [0] = { mood = 0.0, satiety = 0.0 },
+    [1] = { mood = 0.01, satiety = 0.01 },
+    [2] = { mood = 0.03, satiety = 0.03 },
+    [3] = { mood = 0.05, satiety = 0.05 },
+    [4] = { mood = 0.08, satiety = 0.08 },
+    [5] = { mood = 0.12, satiety = 0.12 },
+    [6] = { mood = 0.20, satiety = 0.20 },
 }
 
--- Helper function to find pet definition by name in config
 local function find_pet_def_by_name(name)
     local config = require("tamagotchi.config").values
     if not name or not config.pets then return nil end
@@ -36,13 +33,11 @@ function Pet:new(o)
         vim.notify("pet created without a name!", vim.log.levels.DEBUG)
     end
 
-    -- Use sprites from global config defaults if not provided
     if not o.sprites and o.name then
         local pet_def = find_pet_def_by_name(o.name)
-        if pet_def and pet_def.sprites then o.sprites = pet_def.sprites end
+        if pet_def and pet_def.sprites then             o.sprites = pet_def.sprites end
     end
 
-    -- Fallback to empty sprites if still not found
     if not o.sprites then
         vim.notify(
             string.format(
@@ -53,32 +48,27 @@ function Pet:new(o)
         )
         o.sprites = { happy = {}, hungry = {}, neutral = {} }
     end
-    -- setup mood and satiety
+
     o.initial_mood = o.initial_mood or config.initial_mood or 80
     o.initial_satiety = o.initial_satiety or config.initial_satiety or 80
     o.mood = o.mood or o.initial_mood
     o.satiety = o.satiety or o.initial_satiety
 
-    -- assign non-critical values without warning
     o.tick_length_ms = o.tick_length_ms or 100
     o.sprite_update_interval = o.sprite_update_interval or 5
     o.birth_time = o.birth_time or vim.loop.now()
 
-    -- load decay probabilities from delay class
     o.decay_speed = (o.decay_speed ~= nil) and o.decay_speed or 3
     local class_vals = DECAY_CLASSES[o.decay_speed] or DECAY_CLASSES[3]
     o.mood_decay_probability = class_vals.mood
     o.satiety_decay_probability = class_vals.satiety
 
-    -- state variables for rendering
     o.sprite_indices = { happy = 1, hungry = 1, neutral = 1 }
     o.last_state = nil
 
-    -- For use in calculating retroactive decay
     o.last_vim_close_time = o.last_vim_close_time or vim.loop.now()
     o.last_window_close_time = o.last_window_close_time or vim.loop.now()
 
-    -- Session statistics
     o.session_start_time = o.session_start_time or vim.loop.now()
     o.total_vim_events = o.total_vim_events or 0
     o.total_mood_gained = o.total_mood_gained or 0
@@ -86,14 +76,10 @@ function Pet:new(o)
     o.times_fed = o.times_fed or 0
     o.times_played_with = o.times_played_with or 0
 
-    -- UI customization
     o.color_theme = o.color_theme or nil
 
     return o
 end
-------------------------------------------------------------------------
--- get / set
-------------------------------------------------------------------------
 
 function Pet:set_name(value)
     assert(type(value) == "string", "name must be a string")
@@ -153,7 +139,6 @@ function Pet:get_age_formatted()
     return table.concat(parts, " ")
 end
 
--- convert pet to a plain table for serialization
 function Pet:to_table()
     local t = {}
     for key, value in pairs(self) do
@@ -162,11 +147,6 @@ function Pet:to_table()
     return t
 end
 
-------------------------------------------------------------------------
--- state updating
-------------------------------------------------------------------------
-
--- decrement satiety and mood
 function Pet:update()
     -- Use separate random values to avoid correlation between mood and satiety decay
     local rand_mood = math.random()
@@ -207,7 +187,6 @@ function Pet:get_session_duration()
 end
 
 function Pet:reset()
-    -- Reset pet to initial values
     self.mood = self.initial_mood
     self.satiety = self.initial_satiety
     self.birth_time = vim.loop.now()
@@ -215,23 +194,19 @@ function Pet:reset()
     self.last_vim_close_time = vim.loop.now()
     self.last_window_close_time = vim.loop.now()
 
-    -- Reset statistics
     self.total_vim_events = 0
     self.total_mood_gained = 0
     self.total_satiety_gained = 0
     self.times_fed = 0
     self.times_played_with = 0
 
-    -- Reset sprite state
     self.sprite_indices = { happy = 1, hungry = 1, neutral = 1 }
     self.last_state = nil
     
-    -- Reset UI customization
     self.color_theme = nil
 end
 
 function Pet:transfer_stats_to(target_pet)
-    -- Transfer progress to another pet (keeping stats, changing appearance)
     target_pet.mood = self.mood
     target_pet.satiety = self.satiety
     target_pet.birth_time = self.birth_time
@@ -239,16 +214,12 @@ function Pet:transfer_stats_to(target_pet)
     target_pet.last_vim_close_time = self.last_vim_close_time
     target_pet.last_window_close_time = self.last_window_close_time
 
-    -- Transfer statistics
     target_pet.total_vim_events = self.total_vim_events
     target_pet.total_mood_gained = self.total_mood_gained
     target_pet.total_satiety_gained = self.total_satiety_gained
     target_pet.times_fed = self.times_fed
     target_pet.times_played_with = self.times_played_with
 end
-------------------------------------------------------------------------
--- sprite logic
-------------------------------------------------------------------------
 
 local function determine_state(pet)
     if pet.satiety < 70 then
@@ -263,7 +234,6 @@ end
 function Pet:get_sprite()
     local state = determine_state(self)
 
-    -- reset sprite index if state has changed
     if not self.last_state or self.last_state ~= state then
         self.last_state = state
         self.sprite_indices[state] = 1
@@ -280,39 +250,28 @@ function Pet:get_sprite()
     return sprite
 end
 
-------------------------------------------------------------------------
--- persistence
-------------------------------------------------------------------------
-
--- save pet long term, between vim sessions
 function Pet:save_on_vim_close(filepath)
     self.last_vim_close_time = vim.loop.now()
     self:store(filepath)
 end
 
--- save pet short term, between tamagotchi.nvim window toggles
 function Pet:save_on_window_close(filepath)
     self.last_window_close_time = vim.loop.now()
     self:store(filepath)
 end
 
--- Get the default save path for this pet
 function Pet:get_save_path()
     local base_dir = vim.fn.stdpath("data")
     if self.name and #self.name > 0 then
-        -- Use pet-specific filename for better organization
         return base_dir .. "/tamagotchi_" .. self.name .. ".json"
     else
-        -- Fallback to generic name if pet has no name
         return base_dir .. "/tamagotchi.json"
     end
 end
 
--- store pet state at filepath (default path in Neovim data directory)
 function Pet:store(filepath)
     filepath = filepath or self:get_save_path()
 
-    -- ensure dir exists
     local dir = vim.fn.fnamemodify(filepath, ":h")
     if vim.fn.isdirectory(dir) == 0 then vim.fn.mkdir(dir, "p") end
 
@@ -320,7 +279,6 @@ function Pet:store(filepath)
     vim.fn.writefile({ data }, filepath)
 end
 
--- load pet state from a file, returns a new Pet or nil if file does not exist
 function Pet.load_on_vim_open(filepath)
     filepath = filepath or (vim.fn.stdpath("data") .. "/tamagotchi.json")
 
@@ -335,18 +293,14 @@ function Pet.load_on_vim_open(filepath)
 
     local pet = Pet:new(data)
 
-    -- Apply retroactive decay based on time elapsed
     local elapsed_seconds = (vim.loop.now() - pet.last_vim_close_time) / 1000
 
-    -- Calculate expected decay (linear with time, but cap at reasonable values)
-    -- decay_probability represents chance per second, so expected value is probability * time
-    local max_decay_time = 3600 -- Cap decay at 1 hour worth (prevents instant death after long absence)
+    local max_decay_time = 3600
     local effective_time = math.min(elapsed_seconds, max_decay_time)
 
     local mood_decay = pet.mood_decay_probability * effective_time
     local satiety_decay = pet.satiety_decay_probability * effective_time
 
-    -- Apply decay with minimum floor of 10
     pet.mood = math.max(10, pet.mood - mood_decay)
     pet.satiety = math.max(10, pet.satiety - satiety_decay)
 

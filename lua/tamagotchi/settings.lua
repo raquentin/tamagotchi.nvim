@@ -14,7 +14,6 @@ local function format_duration(seconds)
     end
 end
 
--- terminal color names
 local COLORS = {
     { name = "red", hl = "TamagotchiColorRed" },
     { name = "green", hl = "TamagotchiColorGreen" },
@@ -62,7 +61,6 @@ function M.show_settings(pet)
     table.insert(lines, "")
     table.insert(lines, "  press any other key to close")
 
-    -- create centered floating window
     local width = 50
     local height = #lines
     local buf = vim.api.nvim_create_buf(false, true)
@@ -87,7 +85,6 @@ function M.show_settings(pet)
     vim.api.nvim_buf_set_option(buf, "modifiable", false)
     vim.api.nvim_buf_set_option(buf, "buftype", "nofile")
 
-    -- add color highlights: subheadings gray
     vim.api.nvim_buf_add_highlight(buf, -1, "Comment", 3, 0, -1)
     vim.api.nvim_buf_add_highlight(buf, -1, "Comment", 11, 0, -1)
 
@@ -97,7 +94,6 @@ function M.show_settings(pet)
         end
     end
 
-    -- rename pet handler
     local function rename_pet()
         close_win()
         local dialogue = require("tamagotchi.dialogue")
@@ -132,13 +128,11 @@ function M.show_settings(pet)
         )
     end
 
-    -- color selection handler
     local function choose_color()
         close_win()
         M.show_color_picker(pet)
     end
 
-    -- set up key mappings
     vim.api.nvim_buf_set_keymap(buf, "n", "r", "", {
         noremap = true,
         silent = true,
@@ -161,7 +155,6 @@ function M.show_settings(pet)
         callback = choose_color,
     })
 
-    -- close on any other key
     for _, key in ipairs({ "q", "Q", "<Esc>", "<CR>", "<Space>", "s", "S" }) do
         vim.api.nvim_buf_set_keymap(
             buf,
@@ -216,10 +209,8 @@ function M.show_color_picker(pet)
     vim.api.nvim_buf_set_option(buf, "modifiable", false)
     vim.api.nvim_buf_set_option(buf, "buftype", "nofile")
 
-    -- highlight title
     vim.api.nvim_buf_add_highlight(buf, -1, "Title", 1, 0, -1)
 
-    -- highlight each color option with its color
     for i, color in ipairs(COLORS) do
         local line_idx = i + 2 -- offset by header lines
         vim.api.nvim_buf_add_highlight(buf, -1, color.hl, line_idx, 0, -1)

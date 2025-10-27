@@ -1,6 +1,5 @@
 local M = {}
 
--- Show a yes/no confirmation dialogue
 function M.confirm(title, message, on_yes, on_no)
     local lines = {}
     local title_line_idx = 1
@@ -61,10 +60,8 @@ function M.confirm(title, message, on_yes, on_no)
     vim.api.nvim_buf_set_option(buf, "modifiable", false)
     vim.api.nvim_buf_set_option(buf, "buftype", "nofile")
 
-    -- add highlights: options in gray
     vim.api.nvim_buf_add_highlight(buf, -1, "Comment", options_line_idx, 0, -1)
 
-    -- Set up key mappings
     local function close_and_call(callback)
         vim.api.nvim_win_close(win, true)
         if callback then callback() end
@@ -99,7 +96,6 @@ function M.confirm(title, message, on_yes, on_no)
     return win
 end
 
--- Show a choice dialogue with custom options
 function M.choice(title, message, option1, option2, on_option1, on_option2)
     local lines = {}
     local title_line_idx = 1
@@ -107,7 +103,6 @@ function M.choice(title, message, option1, option2, on_option1, on_option2)
     table.insert(lines, "  " .. title)
     table.insert(lines, "")
 
-    -- split message by newlines first
     local paragraphs = {}
     for paragraph in (message .. "\n"):gmatch("(.-)\n") do
         table.insert(paragraphs, paragraph)
@@ -133,7 +128,6 @@ function M.choice(title, message, option1, option2, on_option1, on_option2)
                     if current_line ~= "" then
                         local line_text = "  " .. current_line
                         table.insert(lines, line_text)
-                        -- track if this line starts with "note:"
                         if current_line:match("^note:") then
                             table.insert(note_lines, #lines - 1)
                         end
@@ -142,10 +136,9 @@ function M.choice(title, message, option1, option2, on_option1, on_option2)
                 end
             end
             if current_line ~= "" then
-                local line_text = "  " .. current_line
-                table.insert(lines, line_text)
-                -- track if this line starts with "note:"
-                if current_line:match("^note:") then
+                    local line_text = "  " .. current_line
+                    table.insert(lines, line_text)
+                    if current_line:match("^note:") then
                     table.insert(note_lines, #lines - 1)
                 end
             end
@@ -185,7 +178,6 @@ function M.choice(title, message, option1, option2, on_option1, on_option2)
     vim.api.nvim_buf_set_option(buf, "modifiable", false)
     vim.api.nvim_buf_set_option(buf, "buftype", "nofile")
 
-    -- add highlights: "note:" lines in gray
     for _, line_idx in ipairs(note_lines) do
         vim.api.nvim_buf_add_highlight(buf, -1, "Comment", line_idx, 0, -1)
     end
@@ -214,7 +206,6 @@ function M.choice(title, message, option1, option2, on_option1, on_option2)
     return win
 end
 
--- Show an input dialogue to get text from user
 function M.input(title, message, default_value, on_submit, on_cancel)
     default_value = default_value or ""
 
@@ -275,7 +266,6 @@ function M.input(title, message, default_value, on_submit, on_cancel)
     vim.api.nvim_buf_set_option(buf, "modifiable", false)
     vim.api.nvim_buf_set_option(buf, "buftype", "nofile")
 
-    -- Use vim.ui.input for getting text input
     vim.schedule(function()
         vim.api.nvim_win_close(win, true)
         vim.ui.input({

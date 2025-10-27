@@ -1,21 +1,17 @@
 local M = {}
 
 function M.on_event(event_name, mood_inc, sat_inc)
-    -- Validate inputs
     assert(type(event_name) == "string", "event_name must be a string")
     assert(type(mood_inc) == "number", "mood_inc must be a number")
     assert(type(sat_inc) == "number", "sat_inc must be a number")
 
     local pet = _G.tamagotchi_pet
     if not pet then
-        -- Pet hasn't been initialized yet, which can happen during startup
         return
     end
 
-    -- Record the event
     pet:record_event()
 
-    -- Apply increments (can be negative for penalties)
     if mood_inc > 0 then
         pet:increase_mood(mood_inc)
     elseif mood_inc < 0 then
