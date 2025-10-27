@@ -97,8 +97,6 @@ NATIVE PETS                      *tamagotchi-🐱-tamagotchi.nvim-native-pets*
 - **Grizz**: a bear (moderate decay, very hungry)
 
 
-
-
 CONTRIBUTING                    *tamagotchi-🐱-tamagotchi.nvim-contributing*
 
 Submit issues and PRs as you please. If you have a more general question, start
