@@ -73,9 +73,7 @@ require('tamagotchi').setup({
 - **Bunny**: a bunny (active, high satiety needs)
 - **Dragon**: a dragon (slow decay, hardy)
 - **Grizz**: a bear (moderate decay, very hungry)
-
-<img width="905" height="519" alt="Screenshot 2025-10-17 at 11 10 15 PM" src="https://github.com/user-attachments/assets/fddf828d-2c86-49c2-a157-49bcac81467f" />
-
+  
 ## Contributing
 
 Submit issues and PRs as you please. If you have a more general question, start a [discussion](https://github.com/raquentin/tamagotchi.nvim/discussions).
