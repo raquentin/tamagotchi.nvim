@@ -9,13 +9,17 @@ local M = {}
 
 M._cache = nil
 
+-- Nerd Font glyphs rather than emoji: emoji render at double width in some
+-- terminals and not at all in others, and a statusline is the one place where a
+-- glyph that measures wrong shifts everything after it. `satiety` is cutlery,
+-- not a food item -- an icon for "has eaten" should not name a food.
 local ICONS = {
-    unicode = {
-        alive = "🐱",
-        sick = "🤒",
-        dead = "💀",
-        mood = "♥",
-        satiety = "🍖",
+    nerd = {
+        alive = "\u{f1b0}", -- nf-fa-paw
+        sick = "\u{f0c0a}", -- nf-md-emoticon_sick
+        dead = "\u{f068c}", -- nf-md-skull
+        mood = "\u{f004}", -- nf-fa-heart
+        satiety = "\u{f0f5}", -- nf-fa-cutlery
     },
     ascii = {
         alive = ":3",
@@ -28,7 +32,7 @@ local ICONS = {
 
 local function icons(opts)
     if opts.ascii then return ICONS.ascii end
-    return ICONS.unicode
+    return ICONS.nerd
 end
 
 -- Drop the cache so the next get() rebuilds. Called by the tick and by anything
@@ -50,8 +54,11 @@ function M.build(pet, opts)
 
     local parts = { face }
     if opts.name ~= false then parts[#parts + 1] = pet.name end
-    parts[#parts + 1] = ("%s%d"):format(set.mood, math.floor(pet:get_mood()))
-    parts[#parts + 1] = ("%s%d"):format(
+    -- Space between glyph and number: Nerd Font icons occupy one cell as far as
+    -- the terminal is concerned but are drawn wider than one, so without it the
+    -- icon paints over the first digit.
+    parts[#parts + 1] = ("%s %d"):format(set.mood, math.floor(pet:get_mood()))
+    parts[#parts + 1] = ("%s %d"):format(
         set.satiety,
         math.floor(pet:get_satiety())
     )

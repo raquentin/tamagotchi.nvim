@@ -23,17 +23,19 @@ export XDG_CACHE_HOME="$DEMO_DIR/cache"
 
 # VHS renders through a headless browser, which sees only the fonts fontconfig
 # can find. With no monospace font installed it silently falls back to a
-# proportional one and the whole UI comes out ragged, so put the two the tape
+# proportional one and the whole UI comes out ragged, so put the one the tape
 # asks for where fontconfig looks: $XDG_DATA_HOME/fonts, which is inside the
 # throwaway directory and leaves the machine's own font setup alone.
-if ! fc-list : family | grep -qi "JetBrains Mono"; then
-    mkdir -p "$XDG_DATA_HOME/fonts"
-    for font in jetbrains-mono noto-fonts-color-emoji; do
-        store_path="$(nix build --no-link --print-out-paths "nixpkgs#$font")"
-        find "$store_path" \( -name '*.ttf' -o -name '*.otf' \) \
-            -exec ln -sf {} "$XDG_DATA_HOME/fonts/" \;
-    done
-fi
+#
+# It has to be the Nerd Font build -- the statusline component draws its icons
+# from the Nerd Font range, and plain JetBrains Mono renders them as tofu.
+mkdir -p "$XDG_DATA_HOME/fonts"
+# The NerdFontMono build specifically: its icons are squeezed into a single
+# cell, where the proportional build draws them ~1.5 cells wide and they bleed
+# over the character after them.
+nerd_font="$(nix build --no-link --print-out-paths nixpkgs#nerd-fonts.jetbrains-mono)"
+find "$nerd_font" -name 'JetBrainsMonoNerdFontMono-*.ttf' \
+    -exec ln -sf {} "$XDG_DATA_HOME/fonts/" \;
 
 # The colorscheme, fetched the same way, so the recording does not depend on
 # whatever is installed for the person running it.

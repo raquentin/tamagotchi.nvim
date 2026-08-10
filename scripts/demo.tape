@@ -13,7 +13,7 @@ Output media/demo.gif
 Require nvim
 
 Set Shell "bash"
-Set FontFamily "JetBrains Mono"
+Set FontFamily "JetBrainsMono Nerd Font Mono"
 Set FontSize 16
 Set Width 1000
 Set Height 620

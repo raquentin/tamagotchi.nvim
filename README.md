@@ -1,4 +1,4 @@
-# 🐱 tamagotchi.nvim
+# tamagotchi.nvim
 
 is a configurable plugin for raising pets across Neovim sessions.
 
@@ -146,7 +146,8 @@ require("lualine").setup({
 })
 ```
 
-Both accept `{ ascii = true }` for a terminal without emoji, and
+The icons are Nerd Font glyphs. Both accept `{ ascii = true }` for a terminal
+without one, and
 `{ name = false }` to show only the stats. The string is rebuilt once per tick,
 not on every redraw.
 
