@@ -3,26 +3,26 @@
 ==============================================================================
 Table of Contents                               *tamagotchi-table-of-contents*
 
-1. 🐱 tamagotchi.nvim                      |tamagotchi-🐱-tamagotchi.nvim|
-  - Features                        |tamagotchi-🐱-tamagotchi.nvim-features|
-  - Installation                |tamagotchi-🐱-tamagotchi.nvim-installation|
-  - Usage                              |tamagotchi-🐱-tamagotchi.nvim-usage|
-  - Configuration              |tamagotchi-🐱-tamagotchi.nvim-configuration|
-  - Native Pets                  |tamagotchi-🐱-tamagotchi.nvim-native-pets|
-  - Statusline                    |tamagotchi-🐱-tamagotchi.nvim-statusline|
-  - Highlights                    |tamagotchi-🐱-tamagotchi.nvim-highlights|
-  - Stakes                            |tamagotchi-🐱-tamagotchi.nvim-stakes|
-  - Data                                |tamagotchi-🐱-tamagotchi.nvim-data|
-  - Contributing                |tamagotchi-🐱-tamagotchi.nvim-contributing|
+1. tamagotchi.nvim                                |tamagotchi-tamagotchi.nvim|
+  - Features                             |tamagotchi-tamagotchi.nvim-features|
+  - Installation                     |tamagotchi-tamagotchi.nvim-installation|
+  - Usage                                   |tamagotchi-tamagotchi.nvim-usage|
+  - Configuration                   |tamagotchi-tamagotchi.nvim-configuration|
+  - Native Pets                       |tamagotchi-tamagotchi.nvim-native-pets|
+  - Statusline                         |tamagotchi-tamagotchi.nvim-statusline|
+  - Highlights                         |tamagotchi-tamagotchi.nvim-highlights|
+  - Stakes                                 |tamagotchi-tamagotchi.nvim-stakes|
+  - Data                                     |tamagotchi-tamagotchi.nvim-data|
+  - Contributing                     |tamagotchi-tamagotchi.nvim-contributing|
 2. Links                                                    |tamagotchi-links|
 
 ==============================================================================
-1. 🐱 tamagotchi.nvim                      *tamagotchi-🐱-tamagotchi.nvim*
+1. tamagotchi.nvim                                *tamagotchi-tamagotchi.nvim*
 
 is a configurable plugin for raising pets across Neovim sessions.
 
 
-FEATURES                            *tamagotchi-🐱-tamagotchi.nvim-features*
+FEATURES                                 *tamagotchi-tamagotchi.nvim-features*
 
 - Floating Window UI: Displays your pet with sprite animations, stat bars, and a row of interaction keys.
 - Customizable Behavior: Configure tick length, decay speed, and Vim events that affect your pet’s mood and satiety.
@@ -34,7 +34,7 @@ FEATURES                            *tamagotchi-🐱-tamagotchi.nvim-features*
 Requires Neovim 0.10 or newer.
 
 
-INSTALLATION                    *tamagotchi-🐱-tamagotchi.nvim-installation*
+INSTALLATION                         *tamagotchi-tamagotchi.nvim-installation*
 
 
 VIM-PLUG
@@ -61,7 +61,7 @@ No `setup()` call is required. If you do call it, the plugin initializes itself
 with defaults on `VimEnter`.
 
 
-USAGE                                  *tamagotchi-🐱-tamagotchi.nvim-usage*
+USAGE                                       *tamagotchi-tamagotchi.nvim-usage*
 
 Press `<leader>tg` to toggle the pet window, or use `:Tamagotchi`.
 
@@ -89,7 +89,7 @@ Press `<leader>tg` to toggle the pet window, or use `:Tamagotchi`.
                                       keymap problems
   -----------------------------------------------------------------------
 
-CONFIGURATION                  *tamagotchi-🐱-tamagotchi.nvim-configuration*
+CONFIGURATION                       *tamagotchi-tamagotchi.nvim-configuration*
 
 >lua
     require('tamagotchi').setup({
@@ -157,7 +157,7 @@ whether or not Neovim is running. `max_offline_decay_seconds` bounds how much a
 single absence can cost, so coming long breaks don’t hurt your pet.
 
 
-NATIVE PETS                      *tamagotchi-🐱-tamagotchi.nvim-native-pets*
+NATIVE PETS                           *tamagotchi-tamagotchi.nvim-native-pets*
 
 - **Sasha**: a cat (moderate decay, balanced)
 - **Lucy**: a star and mascot of the Gleam programming language <https://gleam.run/> (faster decay, food-focused)
@@ -171,7 +171,7 @@ Each comes tinted; `s` then `c` in the pet window picks a different color, and
 resetting the pet puts its default back.
 
 
-STATUSLINE                        *tamagotchi-🐱-tamagotchi.nvim-statusline*
+STATUSLINE                             *tamagotchi-tamagotchi.nvim-statusline*
 
 >lua
     vim.o.statusline = "%!v:lua.require'tamagotchi.statusline'.get()"
@@ -185,12 +185,12 @@ With lualine:
     })
 <
 
-Both accept `{ ascii = true }` for a terminal without emoji, and `{ name =
-false }` to show only the stats. The string is rebuilt once per tick, not on
-every redraw.
+The icons are Nerd Font glyphs. Both accept `{ ascii = true }` for a terminal
+without one, and `{ name = false }` to show only the stats. The string is
+rebuilt once per tick, not on every redraw.
 
 
-HIGHLIGHTS                        *tamagotchi-🐱-tamagotchi.nvim-highlights*
+HIGHLIGHTS                             *tamagotchi-tamagotchi.nvim-highlights*
 
 Every group is linked with `default = true`, so setting one before or after
 `setup()` wins.
@@ -228,7 +228,7 @@ Every group is linked with `default = true`, so setting one before or after
                                                   themes
   -----------------------------------------------------------------------
 
-STAKES                                *tamagotchi-🐱-tamagotchi.nvim-stakes*
+STAKES                                     *tamagotchi-tamagotchi.nvim-stakes*
 
 Off by default. With `stakes = true`, a pet left at rock-bottom mood or satiety
 gets sick after `sick_after_seconds` and dies after `death_after_seconds`. A
@@ -237,7 +237,7 @@ dead pet stops decaying, shows a tombstone, and can be brought back with
 `graveyard/` rather than deleting it.
 
 
-DATA                                    *tamagotchi-🐱-tamagotchi.nvim-data*
+DATA                                         *tamagotchi-tamagotchi.nvim-data*
 
 Pets live in `stdpath("data")/tamagotchi/`:
 
@@ -254,7 +254,7 @@ run and left in place; once you’ve confirmed everything came across, they can
 be deleted.
 
 
-CONTRIBUTING                    *tamagotchi-🐱-tamagotchi.nvim-contributing*
+CONTRIBUTING                         *tamagotchi-tamagotchi.nvim-contributing*
 
 >sh
     nix develop     # neovim, stylua, luacheck, busted
