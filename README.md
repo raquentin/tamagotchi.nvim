@@ -2,7 +2,7 @@
 
 is a configurable plugin for raising pets across Neovim sessions.
 
-https://github.com/user-attachments/assets/8462955d-ad6c-4499-9d9f-8265ba00fd0f
+![Sasha, hungry, being fed, played with and re-themed, then fed again by a buffer write](media/demo.gif)
 
 ## Features
 - Floating Window UI: Displays your pet with sprite animations, stat bars, and a row of interaction keys.
@@ -201,5 +201,9 @@ make ci         # exactly what CI runs
 
 `make test` runs the specs in headless Neovim; `make format` applies stylua.
 `doc/tamagotchi.txt` is generated from this README by CI — don't edit it by hand.
+
+`make demo` re-records `media/demo.gif` with [vhs](https://github.com/charmbracelet/vhs)
+from `scripts/demo.tape`. It runs against a throwaway `XDG_DATA_HOME` and a
+seeded pet, so it never touches your own save and every run comes out the same.
 
 Submit issues and PRs as you please. If you have a more general question, start a [discussion](https://github.com/raquentin/tamagotchi.nvim/discussions).

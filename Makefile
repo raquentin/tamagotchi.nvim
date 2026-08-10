@@ -13,7 +13,7 @@ LUACHECK ?= luacheck
 # Keep in sync with .github/workflows/ci.yml and flake.nix.
 STYLUA_VERSION := 2.5.2
 
-.PHONY: help lint luacheck format test test-deps ci
+.PHONY: help lint luacheck format test test-deps ci demo
 
 help:
 	echo "Targets:"
@@ -22,6 +22,7 @@ help:
 	echo "  make test       # run the busted specs in headless nvim"
 	echo "  make test-deps  # install busted+luassert into ./.luarocks"
 	echo "  make ci         # lint + test (exactly what CI runs)"
+	echo "  make demo       # re-record media/demo.gif with vhs"
 
 luacheck:
 	$(LUACHECK) $(LUA_DIRS)
@@ -41,3 +42,6 @@ test-deps:
 	luarocks --tree .luarocks install luassert
 
 ci: lint test
+
+demo:
+	./scripts/record-demo.sh
