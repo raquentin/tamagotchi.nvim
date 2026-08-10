@@ -19,7 +19,10 @@ describe("ui", function()
             pcall(handle.close)
         end
         opened = {}
-        vim.o.winborder = ""
+        -- 0.10 has no 'winborder', and assigning an unknown option raises, so
+        -- this teardown has to be guarded the same way the test that sets it
+        -- is. Unguarded, it failed every spec in this file on the 0.10 leg.
+        pcall(function() vim.o.winborder = "" end)
     end)
 
     describe("resolve_border", function()
