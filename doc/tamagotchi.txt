@@ -26,7 +26,7 @@ https://github.com/user-attachments/assets/8462955d-ad6c-4499-9d9f-8265ba00fd0f
 
 FEATURES                            *tamagotchi-🐱-tamagotchi.nvim-features*
 
-- Floating Window UI: Displays your pet with sprite animations, stat bars, and a row of interaction keys. Follows your colorscheme and your `'winborder'`.
+- Floating Window UI: Displays your pet with sprite animations, stat bars, and a row of interaction keys.
 - Customizable Behavior: Configure tick length, decay speed, and Vim events that affect your pet’s mood and satiety.
 - Multiple Pets: Manage a list of pets, select different ones from a menu, view more info, and reset as needed.
 - Persistent State: Your pet’s mood, satiety, and age persist across Neovim sessions.
@@ -59,8 +59,8 @@ LAZY.NVIM
     { "raquentin/tamagotchi.nvim", }
 <
 
-No setup call is required. If you never call `setup()`, the plugin initializes
-itself with defaults on `VimEnter`.
+No `setup()` call is required. If you do call it, the plugin initializes itself
+with defaults on `VimEnter`.
 
 
 USAGE                                  *tamagotchi-🐱-tamagotchi.nvim-usage*
@@ -90,38 +90,6 @@ Press `<leader>tg` to toggle the pet window, or use `:Tamagotchi`.
   :checkhealth tamagotchi             diagnose config, storage, and
                                       keymap problems
   -----------------------------------------------------------------------
-Inside the pet window:
-
->
-    ╭──────────── Sasha · 2h 14m ────────────╮
-    │                                        │
-    │      /\_/\      mood    ███████▌░░ ▲    │
-    │     ( o.o )     satiety █████░░░░░ ·    │
-    │      > ^ <                             │
-    │                                        │
-    │────────────────────────────────────────│
-    │  f feed    p play    t pet    c clean  │
-    ╰────── m menu · s settings · ? help ────╯
-<
-
-The name and age label the window, the two bars are the things worth watching,
-and the verbs sit on the bottom row. `?` opens the key list, `q` closes. Every
-float in the plugin answers the same three: `?`, `q`, `<Esc>`.
-
-A resting bar is colored by how full it is — green above 60, yellow above 25,
-red below — so a starving pet looks starving. When a stat actually moves, the
-label, the bar and the marker all turn green (`▲`) or red (`▼`) together
-for two seconds; `·` means nothing has changed recently. Decay is fractional,
-so a fall only registers once a whole point has gone, which is about every 20s
-at the default decay speed.
-
-Reset lives inside settings (`x`), not on the main window — it can delete
-every save. If your pet has died, the action row becomes `R revive`.
-
-Each interaction has a cooldown, and repeating one in quick succession gives
-diminishing returns — you can’t top a bar up by spamming `:Tamagotchi
-feed`.
-
 
 CONFIGURATION                  *tamagotchi-🐱-tamagotchi.nvim-configuration*
 
@@ -184,23 +152,22 @@ CONFIGURATION                  *tamagotchi-🐱-tamagotchi.nvim-configuration*
     })
 <
 
-Your pets are appended to the native ones. Two pets can’t share a name.
+Your pets are appended to the native ones.
 
 Mood and satiety decay by `decay_speed` points per second of wall-clock time,
 whether or not Neovim is running. `max_offline_decay_seconds` bounds how much a
-single absence can cost, so coming back from holiday doesn’t flatten your
-pet.
+single absence can cost, so coming long breaks don’t hurt your pet.
 
 
 NATIVE PETS                      *tamagotchi-🐱-tamagotchi.nvim-native-pets*
 
-- **Sasha**: a cat, blue (moderate decay, balanced)
-- **Lucy**: a star and mascot of the Gleam programming language <https://gleam.run/>, red (faster decay, food-focused)
-- **Churro**: a dog, yellow (moderate decay, mood-focused)
-- **Bunny**: a bunny, magenta (active, high satiety needs)
-- **Dragon**: a dragon, green (slow decay, hardy)
-- **Grizz**: a bear, white (fast decay, very hungry)
-- **Po**: a small bear, cyan (moderate decay, easygoing)
+- **Sasha**: a cat (moderate decay, balanced)
+- **Lucy**: a star and mascot of the Gleam programming language <https://gleam.run/> (faster decay, food-focused)
+- **Churro**: a dog (moderate decay, mood-focused)
+- **Bunny**: a bunny (active, high satiety needs)
+- **Dragon**: a dragon (slow decay, hardy)
+- **Grizz**: a bear (fast decay, very hungry)
+- **Po**: a panda (moderate decay, easygoing)
 
 Each comes tinted; `s` then `c` in the pet window picks a different color, and
 resetting the pet puts its default back.
