@@ -1,0 +1,48 @@
+# Split from ci.yml so that workflow can stay on `contents: read`.
+# doc/tamagotchi.txt is generated from README.md -- do not hand-edit it.
+name: docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - README.md
+      - .github/workflows/docs.yml
+
+permissions:
+  contents: write
+
+# Never cancel: two auto-commits racing to push to main is worse than waiting.
+concurrency:
+  group: docs
+  cancel-in-progress: false
+
+jobs:
+  panvimdoc:
+    name: pandoc to vimdoc
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # SHA-pinned deliberately: this job holds write access to the default
+      # branch, so a floating @main ref here would be a supply-chain hole.
+      - uses: kdheepak/panvimdoc@662fb20304d20c539fb48a0bda628f5165507de7 # v4.0.1
+        with:
+          vimdoc: tamagotchi
+          treesitter: true
+
+      # panvimdoc writes doc/tamagotchi.txt but not doc/tags, so without this
+      # the committed tag file drifts from the help it indexes -- it was still
+      # pointing at a section removed months earlier.
+      - uses: rhysd/action-setup-vim@febef33995d6649302e9d88dda81e071b68f16a7 # v1.6.1
+        with:
+          neovim: true
+          version: stable
+      - run: nvim --headless -c "helptags doc" -c "qa!"
+
+      - uses: stefanzweifel/git-auto-commit-action@4a55954c782fc1ea30b9056cd3e7a2b40ca8887d # v7.2.0
+        with:
+          commit_message: "chore(doc): auto generate docs"
+          commit_user_name: "github-actions[bot]"
+          commit_user_email: "github-actions[bot]@users.noreply.github.com"
+          commit_author: "github-actions[bot] <github-actions[bot]@users.noreply.github.com>"

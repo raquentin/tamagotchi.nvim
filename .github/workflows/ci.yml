@@ -1,34 +1,64 @@
 name: ci
 
-on: [push]
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   lint:
+    name: lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - name: Stylua
-        uses: JohnnyMorganz/stylua-action@v3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: leafo/gh-actions-lua@6919171ccf181b826f44b9bca76307b577217377 # v13.0.0
+        with:
+          luaVersion: "luajit-openresty"
+      - uses: leafo/gh-actions-luarocks@35d062def313a7699a0d513e996bcf4352f05389 # v6.1.0
+      - run: luarocks install luacheck
+      - run: make luacheck
+
+      # Pinned: with collapse_simple_statement = "Always" in stylua.toml, a new
+      # stylua release can fail --check with no change to this repo.
+      - uses: JohnnyMorganz/stylua-action@76fd70c03e6340ceaf673366712db9b20560b402 # v5.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          version: latest
+          version: 2.5.2
           args: --check .
 
-
-  docs:
+  test:
+    name: test (nvim ${{ matrix.nvim }})
     runs-on: ubuntu-latest
-    name: pandoc to vimdoc
-    if: ${{ github.ref == 'refs/heads/main' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # v0.10 is the supported floor (when vim.uv landed). v0.11 is where
+        # nvim_buf_add_highlight was deprecated, so it catches regressions the
+        # other versions would not.
+        nvim: ["v0.10.4", "v0.11.4", "stable", "nightly"]
+    continue-on-error: ${{ matrix.nvim == 'nightly' }}
     steps:
-      - uses: actions/checkout@v3
-      - name: panvimdoc
-        uses: kdheepak/panvimdoc@main
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: rhysd/action-setup-vim@febef33995d6649302e9d88dda81e071b68f16a7 # v1.6.1
         with:
-          vimdoc: tamagotchi
-          treesitter: true
-      - uses: stefanzweifel/git-auto-commit-action@v4
+          neovim: true
+          version: ${{ matrix.nvim }}
+
+      - uses: leafo/gh-actions-lua@6919171ccf181b826f44b9bca76307b577217377 # v13.0.0
         with:
-          commit_message: 'chore(doc): auto generate docs'
-          commit_user_name: "github-actions[bot]"
-          commit_user_email: "github-actions[bot]@users.noreply.github.com"
-          commit_author: "github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
+          luaVersion: "luajit-openresty"
+      - uses: leafo/gh-actions-luarocks@35d062def313a7699a0d513e996bcf4352f05389 # v6.1.0
+      - run: luarocks --tree .luarocks install busted
+      - run: luarocks --tree .luarocks install luassert
+
+      - run: make test

@@ -1,85 +1,84 @@
+-- Grizz. Rows: face / belly / arms / feet. Arms swing and feet shuffle, so all
+-- four rows carry motion.
 local bear_sprites = {
-    height = 4,
-    width = 9,
-
     happy = {
         [[
-  (•w•)  
-  (   )  
-  /| |\  
-  d   b  
+ (o w o)
+ (     )
+ /|   |\
+ d     b
 ]],
         [[
-  (^w^)
-  (   )  
-  /| |\  
-  d   b  
+ (^ w ^)
+ (  v  )
+ \|   |/
+ d     b
 ]],
         [[
-  (>w<)
-  (   )  
-  /| |\  
-  d   b  
+ (> w <)
+ (     )
+ /|   |\
+ b     d
 ]],
         [[
-  (*w*)
-  (   )  
-  /| |\  
-  d   b  
+ (* w *)
+ (  v  )
+ \|   |/
+ d     b
 ]],
     },
 
     hungry = {
         [[
-  (-w-)
-  (   )  
-  /| |\  
-  d   b  
+ (- w -)
+ (     )
+ /|   |\
+ d     b
 ]],
         [[
-  (owo)
-  (   )  
-  /| |\  
-  d   b  
+ (o w o)
+ (  ~  )
+ \|   |/
+ d     b
 ]],
         [[
-  (;w;)
-  (   )  
-  /| |\  
-  d   b  
+ (; w ;)
+ (     )
+ /|   |\
+ b     d
 ]],
         [[
-  (TwT)
-  (   )  
-  /| |\  
-  d   b  
+ (T w T)
+ (  ~  )
+ \|   |/
+ d     b
 ]],
     },
 
     neutral = {
         [[
-  (-w-)
-  (   )  
-  /| |\  
-  d   b  
+ (- w -)
+ (     )
+ /|   |\
+ d     b
 ]],
         [[
-  (.w.)
-  (   )  
-  /| |\  
-  d   b  
+ (. w .)
+ (     )
+ \|   |/
+ d     b
 ]],
         [[
-  (uwu)
-  (   )  
-  /| |\  
-  d   b  
+ (u w u)
+ (  -  )
+ /|   |\
+ b     d
 ]],
         [[
-  (·w·)
-  (   )  
-  /| |\  
-  d   b  
+ (o w o)
+ (     )
+ \|   |/
+ d     b
 ]],
     },
 }

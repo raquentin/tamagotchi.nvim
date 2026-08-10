@@ -1,13 +1,16 @@
 -- Luacheck configuration for tamagotchi.nvim
 
--- Make luacheck aware of global vim API
+-- Make luacheck aware of the global vim API.
+--
+-- Declared writable (`globals`, not `read_globals`) because the plugin assigns
+-- through it: vim.bo[buf].modifiable, vim.wo[win].wrap, vim.g.loaded_tamagotchi.
+-- Declaring it in both tables, as this file used to, makes luacheck report every
+-- one of those as "setting read-only field".
 globals = {
     "vim",
-}
-
--- Read globals are okay to use
-read_globals = {
-    "vim",
+    -- The active pet is intentionally global so statuslines and user mappings
+    -- can reach it without requiring the plugin.
+    "tamagotchi_pet",
 }
 
 -- Don't report unused self arguments of methods

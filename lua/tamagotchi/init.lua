@@ -1,85 +1,120 @@
 local config = require("tamagotchi.config")
-local window = require("tamagotchi.window")
 
 local M = {}
 
-function M.setup(user_config)
-    config.setup(user_config)
+M._did_setup = false
+M._keybind = nil
 
-    local Pet = require("tamagotchi.pet")
+local EVENTS_AUGROUP = "TamagotchiEvents"
+local LIFECYCLE_AUGROUP = "TamagotchiLifecycle"
 
-    local loaded_pet = Pet.load_on_vim_open()
-    if loaded_pet then
-        _G.tamagotchi_pet = loaded_pet
-    else
-        local chosen_def = nil
-        local desired_name = config.values.default_pet
+local MIN_NVIM = "nvim-0.10"
 
-        if desired_name then
-            for _, pet_def in ipairs(config.values.pets) do
-                if pet_def.name == desired_name then
-                    chosen_def = pet_def
-                    break
-                end
-            end
-        end
+-- Point the plugin at a pet and (re)install that pet's vim_events.
+--
+-- v1 registered these once in setup() from the initial pet, so switching pets
+-- in the menu left the previous pet's event list and increments installed.
+function M.bind_pet(pet)
+    _G.tamagotchi_pet = pet
 
-        if not chosen_def then
-            assert(
-                #config.values.pets > 0,
-                "No pets available in configuration"
-            )
-            math.randomseed(os.time())
-            local idx = math.random(#config.values.pets)
-            chosen_def = config.values.pets[idx]
-        end
+    -- One group for all events, so this single call is the whole teardown.
+    local group = vim.api.nvim_create_augroup(EVENTS_AUGROUP, { clear = true })
+    if not pet or not pet.vim_events then return end
 
-        _G.tamagotchi_pet = Pet:new(chosen_def)
+    for _, evt in ipairs(pet.vim_events) do
+        vim.api.nvim_create_autocmd(evt.name, {
+            pattern = "*",
+            group = group,
+            callback = function()
+                require("tamagotchi.event_handler").on_event(
+                    evt.name,
+                    evt.mood_increment,
+                    evt.satiety_increment
+                )
+            end,
+        })
+    end
+end
+
+function M.teardown()
+    pcall(require("tamagotchi.tick").stop)
+
+    local window = package.loaded["tamagotchi.window"]
+    if window then pcall(window.close, _G.tamagotchi_pet) end
+
+    pcall(vim.api.nvim_create_augroup, EVENTS_AUGROUP, { clear = true })
+    pcall(vim.api.nvim_create_augroup, LIFECYCLE_AUGROUP, { clear = true })
+
+    if M._keybind then
+        pcall(vim.keymap.del, "n", M._keybind)
+        M._keybind = nil
     end
 
-    vim.api.nvim_set_keymap(
-        "n",
-        config.values.window_toggle_keybind,
-        '<cmd>lua require("tamagotchi.window").toggle(_G.tamagotchi_pet)<CR>',
-        { noremap = true, silent = true }
-    )
+    M._did_setup = false
+end
 
-    if _G.tamagotchi_pet.vim_events then
-        for _, evt_def in ipairs(_G.tamagotchi_pet.vim_events) do
-            vim.api.nvim_create_autocmd(evt_def.name, {
-                pattern = "*",
-                callback = function()
-                    require("tamagotchi.event_handler").on_event(
-                        evt_def.name,
-                        evt_def.mood_increment,
-                        evt_def.satiety_increment
-                    )
-                end,
-                group = vim.api.nvim_create_augroup(
-                    "Tamagotchi_" .. evt_def.name,
-                    { clear = true }
-                ),
-            })
-        end
+function M.setup(user_config)
+    if vim.fn.has(MIN_NVIM) == 0 then
+        vim.notify(
+            "tamagotchi.nvim requires Neovim 0.10 or newer",
+            vim.log.levels.ERROR
+        )
+        return
+    end
+
+    -- Idempotent: plugin/tamagotchi.lua may have already run a default setup,
+    -- and a user re-sourcing their config should not accumulate a second pet,
+    -- keymap and timer the way v1 did.
+    if M._did_setup then M.teardown() end
+
+    config.setup(user_config)
+
+    local store = require("tamagotchi.store")
+    store.migrate_legacy()
+
+    M.bind_pet(store.resolve_startup_pet())
+
+    local keybind = config.values.window_toggle_keybind
+    if keybind then
+        vim.keymap.set(
+            "n",
+            keybind,
+            function() require("tamagotchi.window").toggle(_G.tamagotchi_pet) end,
+            { silent = true, desc = "Toggle tamagotchi" }
+        )
+        M._keybind = keybind
     end
 
     vim.api.nvim_create_autocmd("VimLeavePre", {
         pattern = "*",
+        group = vim.api.nvim_create_augroup(
+            LIFECYCLE_AUGROUP,
+            { clear = true }
+        ),
         callback = function()
-            if _G.tamagotchi_pet then _G.tamagotchi_pet:save_on_vim_close() end
+            if _G.tamagotchi_pet then
+                require("tamagotchi.store").save_pet(_G.tamagotchi_pet)
+            end
         end,
-        group = vim.api.nvim_create_augroup("TamagotchiSave", { clear = true }),
     })
 
-    window.start_refresh_loop(_G.tamagotchi_pet)
+    require("tamagotchi.tick").start()
+    require("tamagotchi.statusline").invalidate()
+
+    -- Present even when the user loads the plugin without going through
+    -- plugin/tamagotchi.lua (lazy loaders, tests).
+    if vim.fn.exists(":Tamagotchi") == 0 then
+        require("tamagotchi.command").setup()
+    end
+
+    M._did_setup = true
 end
 
-function M.open_pet_ui()
-    if _G.tamagotchi_pet then
-        window.open(_G.tamagotchi_pet)
-    else
-        vim.notify("no active pet to display.", vim.log.levels.ERROR)
-    end
+-- Called by every :Tamagotchi handler, so the command works for users who
+-- never wrote a setup{} call and before VimEnter has fired.
+function M.ensure_setup()
+    if not M._did_setup then M.setup() end
+    return _G.tamagotchi_pet
 end
 
 return M

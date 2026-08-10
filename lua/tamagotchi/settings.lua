@@ -1,4 +1,10 @@
+local ui = require("tamagotchi.ui")
+
 local M = {}
+
+local NS = ui.namespace
+
+local WIDTH = 46
 
 local function format_duration(seconds)
     local hours = math.floor(seconds / 3600)
@@ -24,100 +30,156 @@ local COLORS = {
     { name = "white", hl = "TamagotchiColorWhite" },
 }
 
-function M.show_settings(pet)
-    assert(pet, "pet is required")
+M.COLORS = COLORS
 
-    local session_duration = pet:get_session_duration()
+-- `x`, not `r`: rename already owns `r`, and reset is the one action here that
+-- can destroy data, so it should not sit under a finger.
+local ACTIONS = {
+    { key = "r", label = "rename pet" },
+    { key = "c", label = "choose color theme" },
+    { key = "x", label = "reset pet" },
+}
 
-    local lines = {}
-    table.insert(lines, "")
-    table.insert(lines, "  pet settings")
-    table.insert(lines, "")
-    table.insert(lines, "  critical stats:")
-    table.insert(lines, string.format("    name: %s", pet.name or "unknown"))
-    table.insert(lines, string.format("    age: %s", pet:get_age_formatted()))
-    table.insert(
-        lines,
-        string.format("    mood: %d / 100", math.floor(pet:get_mood()))
+M.ACTIONS = ACTIONS
+
+-- Keys sit at a fixed indent so the highlighter can find them by column rather
+-- than by parsing the rendered line back apart.
+local KEY_COL = 4
+
+local function action_line(action)
+    return ("%s%s   %s"):format(
+        string.rep(" ", KEY_COL),
+        action.key,
+        action.label
     )
-    table.insert(
-        lines,
-        string.format("    satiety: %d / 100", math.floor(pet:get_satiety()))
-    )
-    table.insert(lines, "")
-    table.insert(
-        lines,
-        string.format("    session time: %s", format_duration(session_duration))
-    )
-    table.insert(lines, string.format("    times fed: %d", pet.times_fed or 0))
-    table.insert(
-        lines,
-        string.format("    times played: %d", pet.times_played_with or 0)
-    )
-    table.insert(lines, "")
-    table.insert(lines, "  actions:")
-    table.insert(lines, "    [r] rename pet")
-    table.insert(lines, "    [c] choose color theme")
-    table.insert(lines, "")
-    table.insert(lines, "  press any other key to close")
+end
 
-    local width = 50
-    local height = #lines
-    local buf = vim.api.nvim_create_buf(false, true)
+local function stat_line(label, value)
+    return ("    %-10s%s"):format(label, value)
+end
 
-    local ui = vim.api.nvim_list_uis()[1]
-    local win_width = ui.width
-    local win_height = ui.height
+-- Locate a line by content rather than by a hard-coded index. v1 highlighted
+-- line 11 ("times played") where it meant line 13 ("actions:"), and any edit to
+-- the block above would have shifted it again.
+local function index_of(lines, pattern)
+    for i, line in ipairs(lines) do
+        if line:match(pattern) then return i - 1 end
+    end
+    return nil
+end
 
-    local opts = {
-        relative = "editor",
-        width = width,
-        height = height,
-        row = math.floor((win_height - height) / 2),
-        col = math.floor((win_width - width) / 2),
-        style = "minimal",
-        border = "rounded",
+M._index_of = index_of
+
+-- Split out so it can be tested without opening a window.
+function M.build_lines(pet)
+    local lines = {
+        "",
+        "  stats",
+        stat_line("name", pet.name or "unknown"),
+        stat_line("age", pet:get_age_formatted()),
+        stat_line("mood", ("%d / 100"):format(math.floor(pet:get_mood()))),
+        stat_line(
+            "satiety",
+            ("%d / 100"):format(math.floor(pet:get_satiety()))
+        ),
+        stat_line("session", format_duration(pet:get_session_duration())),
+        stat_line("fed", tostring(pet.times_fed or 0)),
+        stat_line("played", tostring(pet.times_played_with or 0)),
+        "",
+        "  actions",
     }
 
-    local win = vim.api.nvim_open_win(buf, true, opts)
+    for _, action in ipairs(ACTIONS) do
+        lines[#lines + 1] = action_line(action)
+    end
 
-    vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-    vim.api.nvim_buf_set_option(buf, "modifiable", false)
-    vim.api.nvim_buf_set_option(buf, "buftype", "nofile")
+    lines[#lines + 1] = ""
 
-    vim.api.nvim_buf_add_highlight(buf, -1, "Comment", 3, 0, -1)
-    vim.api.nvim_buf_add_highlight(buf, -1, "Comment", 11, 0, -1)
+    return lines
+end
 
-    local function close_win()
-        if vim.api.nvim_win_is_valid(win) then
-            vim.api.nvim_win_close(win, true)
+local function highlight(handle, lines)
+    local buf = handle.buf
+
+    local function mark(row, from, to, group)
+        if not row then return end
+        vim.api.nvim_buf_set_extmark(buf, NS, row, from, {
+            end_col = to,
+            hl_group = group,
+        })
+    end
+
+    for _, pattern in ipairs({ "^%s*stats$", "^%s*actions$" }) do
+        local row = index_of(lines, pattern)
+        if row then mark(row, 0, #lines[row + 1], "TamagotchiMuted") end
+    end
+
+    -- Stat labels are dimmed so the values read first.
+    for i, line in ipairs(lines) do
+        if line:match("^    %S") and not line:match("^    %S   ") then
+            mark(i - 1, 4, 14, "TamagotchiMuted")
         end
     end
 
+    for _, action in ipairs(ACTIONS) do
+        local row = index_of(lines, "^" .. vim.pesc(action_line(action)) .. "$")
+        if row then
+            mark(row, KEY_COL, KEY_COL + #action.key, "TamagotchiKey")
+        end
+    end
+end
+
+function M.show_settings(pet)
+    assert(pet, "pet is required")
+
+    local lines = M.build_lines(pet)
+
+    local handle = ui.open({
+        lines = lines,
+        width = WIDTH,
+        title = ui.chunks({ { "settings", "TamagotchiTitle" } }),
+        footer = ui.key_chunks({ { key = "q", label = "close" } }),
+        filetype = "tamagotchi-settings",
+        close_keys = { "q", "Q", "<Esc>", "<C-c>", "<CR>", "<Space>", "s", "S" },
+    })
+
+    highlight(handle, lines)
+
     local function rename_pet()
-        close_win()
-        local dialogue = require("tamagotchi.dialogue")
-        dialogue.input(
+        handle.close()
+
+        require("tamagotchi.dialogue").input(
             "rename pet",
             "enter a new name for your pet:",
             pet.name,
             function(new_name)
+                local store = require("tamagotchi.store")
                 local old_name = pet.name
-                local old_save_path = pet:get_save_path()
 
-                pet:set_name(new_name)
-                pet:save_on_vim_close()
-
-                if
-                    old_name ~= new_name
-                    and vim.fn.filereadable(old_save_path) == 1
-                then
-                    vim.fn.delete(old_save_path)
+                -- Reject an unusable name before touching anything on disk.
+                local ok, err = pcall(store.slug, new_name)
+                if not ok then
+                    vim.notify(
+                        "tamagotchi: " .. tostring(err),
+                        vim.log.levels.ERROR
+                    )
+                    return
                 end
 
+                pet:set_name(new_name)
+                store.save_pet(pet)
+
+                -- save_pet also repoints state.json at the new name, so the
+                -- rename survives a restart; v1 left the pointer behind and a
+                -- renamed pet came back as a different one.
+                if old_name and old_name ~= new_name then
+                    store.delete_pet(old_name)
+                end
+
+                require("tamagotchi.window").update_ui(pet, false)
+
                 vim.notify(
-                    string.format(
-                        "renamed pet from '%s' to '%s'!",
+                    ("renamed pet from '%s' to '%s'!"):format(
                         old_name,
                         new_name
                     ),
@@ -128,136 +190,67 @@ function M.show_settings(pet)
         )
     end
 
-    local function choose_color()
-        close_win()
+    handle.map({ "r", "R" }, rename_pet)
+    handle.map({ "c", "C" }, function()
+        handle.close()
         M.show_color_picker(pet)
-    end
+    end)
+    handle.map({ "x", "X" }, function()
+        handle.close()
+        require("tamagotchi.window").reset_dialogue(pet)
+    end)
 
-    vim.api.nvim_buf_set_keymap(buf, "n", "r", "", {
-        noremap = true,
-        silent = true,
-        callback = rename_pet,
-    })
-    vim.api.nvim_buf_set_keymap(buf, "n", "R", "", {
-        noremap = true,
-        silent = true,
-        callback = rename_pet,
-    })
-
-    vim.api.nvim_buf_set_keymap(buf, "n", "c", "", {
-        noremap = true,
-        silent = true,
-        callback = choose_color,
-    })
-    vim.api.nvim_buf_set_keymap(buf, "n", "C", "", {
-        noremap = true,
-        silent = true,
-        callback = choose_color,
-    })
-
-    for _, key in ipairs({ "q", "Q", "<Esc>", "<CR>", "<Space>", "s", "S" }) do
-        vim.api.nvim_buf_set_keymap(
-            buf,
-            "n",
-            key,
-            "<cmd>close<CR>",
-            { noremap = true, silent = true }
-        )
-    end
-
-    return win
+    return handle.win
 end
 
 function M.show_color_picker(pet)
-    local lines = {}
-    table.insert(lines, "")
-    table.insert(lines, "  choose your color theme")
-    table.insert(lines, "")
+    local lines = { "" }
 
     for i, color in ipairs(COLORS) do
-        local marker = "    "
-        table.insert(
-            lines,
-            string.format("%s[%d] %s", marker, i, color.name)
-        )
+        lines[#lines + 1] = ("    %d   %s"):format(i, color.name)
     end
 
-    table.insert(lines, "")
-    table.insert(lines, "  press number key or [esc] to cancel")
+    lines[#lines + 1] = ""
 
-    local width = 50
-    local height = #lines
-    local buf = vim.api.nvim_create_buf(false, true)
-
-    local ui = vim.api.nvim_list_uis()[1]
-    local win_width = ui.width
-    local win_height = ui.height
-
-    local opts = {
-        relative = "editor",
-        width = width,
-        height = height,
-        row = math.floor((win_height - height) / 2),
-        col = math.floor((win_width - width) / 2),
-        style = "minimal",
-        border = "rounded",
-    }
-
-    local win = vim.api.nvim_open_win(buf, true, opts)
-
-    vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-    vim.api.nvim_buf_set_option(buf, "modifiable", false)
-    vim.api.nvim_buf_set_option(buf, "buftype", "nofile")
-
-    vim.api.nvim_buf_add_highlight(buf, -1, "Title", 1, 0, -1)
+    local handle = ui.open({
+        lines = lines,
+        width = 32,
+        title = ui.chunks({ { "color theme", "TamagotchiTitle" } }),
+        footer = ui.key_chunks({ { key = "esc", label = "cancel" } }),
+        filetype = "tamagotchi-settings",
+    })
 
     for i, color in ipairs(COLORS) do
-        local line_idx = i + 2 -- offset by header lines
-        vim.api.nvim_buf_add_highlight(buf, -1, color.hl, line_idx, 0, -1)
-    end
-
-    local function close_and_select(color_data)
-        if vim.api.nvim_win_is_valid(win) then
-            vim.api.nvim_win_close(win, true)
-        end
-        if color_data then
-            -- save the color to the pet
-            pet.color_theme = color_data.name
-            pet:save_on_vim_close()
-            
-            -- update the window to reflect the new color
-            local window = require("tamagotchi.window")
-            window.update_ui(pet, false)
-            
-            vim.notify(
-                string.format("selected %s theme!", color_data.name),
-                vim.log.levels.INFO
-            )
-        end
-    end
-
-    -- set up number key handlers
-    for i, color in ipairs(COLORS) do
-        vim.api.nvim_buf_set_keymap(buf, "n", tostring(i), "", {
-            noremap = true,
-            silent = true,
-            callback = function() close_and_select(color) end,
+        vim.api.nvim_buf_set_extmark(handle.buf, NS, i, KEY_COL, {
+            end_col = KEY_COL + 1,
+            hl_group = "TamagotchiKey",
+        })
+        vim.api.nvim_buf_set_extmark(handle.buf, NS, i, KEY_COL + 4, {
+            end_col = KEY_COL + 4 + #color.name,
+            hl_group = color.hl,
         })
     end
 
-    -- close on escape
-    vim.api.nvim_buf_set_keymap(buf, "n", "<Esc>", "", {
-        noremap = true,
-        silent = true,
-        callback = function() 
-            if vim.api.nvim_win_is_valid(win) then
-                vim.api.nvim_win_close(win, true)
-            end
-        end,
-    })
+    local function select(color_data)
+        handle.close()
 
-    return win
+        if not color_data then return end
+
+        pet.color_theme = color_data.name
+        require("tamagotchi.store").save_pet(pet)
+        require("tamagotchi.window").update_ui(pet, false)
+
+        vim.notify(
+            ("selected %s theme!"):format(color_data.name),
+            vim.log.levels.INFO
+        )
+    end
+
+    for i, color in ipairs(COLORS) do
+        handle.map({ tostring(i) }, function() select(color) end)
+    end
+
+    return handle.win
 end
 
 return M
-

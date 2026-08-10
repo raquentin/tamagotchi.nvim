@@ -6,9 +6,7 @@ function M.on_event(event_name, mood_inc, sat_inc)
     assert(type(sat_inc) == "number", "sat_inc must be a number")
 
     local pet = _G.tamagotchi_pet
-    if not pet then
-        return
-    end
+    if not pet then return end
 
     pet:record_event()
 

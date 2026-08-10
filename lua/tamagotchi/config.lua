@@ -3,16 +3,50 @@ local lucy_sprites = require("tamagotchi.sprites.lucy")
 local doggo_sprites = require("tamagotchi.sprites.doggo")
 local bunny_sprites = require("tamagotchi.sprites.bunny")
 local dragon_sprites = require("tamagotchi.sprites.dragon")
+local bear_sprites = require("tamagotchi.sprites.bear")
+local po_sprites = require("tamagotchi.sprites.po")
 
 local M = {}
 
 M.defaults = {
+    -- Set to false to bind nothing; :Tamagotchi always works regardless.
     window_toggle_keybind = "<leader>tg",
+
+    -- How often the simulation advances while the window is open, and while it
+    -- is not. Decay is elapsed-based, so the idle rate costs nothing in accuracy.
     tick_length_ms = 1000,
+    idle_tick_ms = 60000,
+
+    -- Upper bound on how much time away can be charged in one go, so coming
+    -- back after a holiday does not instantly flatten the pet.
+    max_offline_decay_seconds = 8 * 3600,
+
+    -- Off by default, deliberately: turning permadeath on for everyone in an
+    -- update would quietly kill pets people have kept for months. Opt in.
+    stakes = false,
+    sick_after_seconds = 6 * 3600,
+    death_after_seconds = 24 * 3600,
+
+    ui = {
+        -- "auto" follows 'winborder' when the user has set it, else rounded.
+        -- Any value nvim_open_win accepts also works here, including a table.
+        border = "auto",
+
+        -- Draw with ASCII instead of block glyphs, for terminals and fonts that
+        -- render the Unicode ones badly.
+        ascii = false,
+    },
+
+    -- "builtin" is the animated menu with sprite previews. "native" hands the
+    -- pet list to vim.ui.select, so telescope / snacks / fzf-lua users get the
+    -- picker they already configured.
+    picker = "builtin",
+
     default_pet = "Sasha",
     pets = {
         {
             name = "Bunny",
+            color_theme = "magenta",
 
             sprite_update_interval = 2,
             sprites = bunny_sprites,
@@ -37,6 +71,7 @@ M.defaults = {
 
         {
             name = "Churro",
+            color_theme = "yellow",
 
             sprite_update_interval = 2,
             sprites = doggo_sprites,
@@ -61,6 +96,7 @@ M.defaults = {
 
         {
             name = "Dragon",
+            color_theme = "green",
 
             sprite_update_interval = 3,
             sprites = dragon_sprites,
@@ -85,6 +121,7 @@ M.defaults = {
 
         {
             name = "Lucy",
+            color_theme = "red",
 
             sprite_update_interval = 3,
             sprites = lucy_sprites,
@@ -108,7 +145,58 @@ M.defaults = {
         },
 
         {
+            name = "Grizz",
+            color_theme = "white",
+
+            sprite_update_interval = 3,
+            sprites = bear_sprites,
+
+            initial_mood = 70,
+            initial_satiety = 60,
+            decay_speed = 4,
+
+            vim_events = {
+                {
+                    name = "BufWritePost",
+                    mood_increment = 3,
+                    satiety_increment = 7,
+                },
+                {
+                    name = "TextYankPost",
+                    mood_increment = 2,
+                    satiety_increment = 2,
+                },
+            },
+        },
+
+        {
+            name = "Po",
+            color_theme = "cyan",
+
+            sprite_update_interval = 2,
+            sprites = po_sprites,
+
+            initial_mood = 80,
+            initial_satiety = 70,
+            decay_speed = 2,
+
+            vim_events = {
+                {
+                    name = "BufWritePost",
+                    mood_increment = 4,
+                    satiety_increment = 4,
+                },
+                {
+                    name = "TextYankPost",
+                    mood_increment = 3,
+                    satiety_increment = 2,
+                },
+            },
+        },
+
+        {
             name = "Sasha",
+            color_theme = "blue",
 
             sprite_update_interval = 2,
             sprites = kitty_sprites,
@@ -215,37 +303,72 @@ local function validate_pet(pet)
     end
 end
 
+local function shallow_copy(t)
+    local out = {}
+    for k, v in pairs(t) do
+        out[k] = v
+    end
+    return out
+end
+
+-- Two pets whose names slug to the same token would share a save file and
+-- silently clobber each other. Case-insensitive, because macOS folds case.
+local function assert_unique_names(pets)
+    local store = require("tamagotchi.store")
+    local seen = {}
+
+    for _, pet in ipairs(pets) do
+        local key = store.slug(pet.name):lower()
+        assert(
+            not seen[key],
+            ("duplicate pet name '%s' (conflicts with '%s')"):format(
+                pet.name,
+                seen[key]
+            )
+        )
+        seen[key] = pet.name
+    end
+end
+
 function M.setup(user_config)
     user_config = user_config or {}
-
-    -- start by deep extending default config with user-provided config
-    local combined = vim.tbl_deep_extend("force", {}, M.defaults, user_config)
-
-    -- mark default pets as native
-    for _, pet in ipairs(M.defaults.pets) do
-        pet.native = true
-    end
 
     assert(
         M.defaults.pets,
         "M.defaults.pets is nil. Ensure pets are defined in defaults."
     )
 
+    -- `pets` is a list, and tbl_deep_extend merges lists index-wise -- so a user
+    -- supplying one pet would overwrite fields of the first default pet rather
+    -- than adding to the roster. Merge the scalar options only, and assemble
+    -- the roster by hand below.
+    local default_opts, user_opts =
+        shallow_copy(M.defaults), shallow_copy(user_config)
+    default_opts.pets, user_opts.pets = nil, nil
+    local combined = vim.tbl_deep_extend("force", {}, default_opts, user_opts)
+
+    -- Copies, never the originals. v1 inserted M.defaults.pets[i] directly, and
+    -- Pet:new then adopted that very table as the live pet -- so a pet's runtime
+    -- mood and birth_time ended up on the module-level defaults, surviving into
+    -- the next setup() call. `sprites` and `vim_events` are shared by reference
+    -- on purpose: large, and never mutated.
     local all_pets = {}
 
     for _, pet in ipairs(M.defaults.pets) do
-        validate_pet(pet)
-        table.insert(all_pets, pet)
+        local copy = shallow_copy(pet)
+        copy.native = true
+        validate_pet(copy)
+        table.insert(all_pets, copy)
     end
 
-    if user_config.pets then
-        for _, pet in ipairs(user_config.pets) do
-            validate_pet(pet)
-            pet.native = false
-            table.insert(all_pets, pet)
-        end
+    for _, pet in ipairs(user_config.pets or {}) do
+        local copy = shallow_copy(pet)
+        copy.native = false
+        validate_pet(copy)
+        table.insert(all_pets, copy)
     end
 
+    assert_unique_names(all_pets)
     table.sort(all_pets, function(a, b) return a.name < b.name end)
 
     combined.pets = all_pets

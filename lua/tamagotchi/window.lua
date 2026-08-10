@@ -1,8 +1,18 @@
+local render = require("tamagotchi.render")
+local ui = require("tamagotchi.ui")
+
 local M = {}
 
 M.current_window = nil
-M.refresh_timer = nil
 M.current_pet = nil
+
+-- One owned namespace, so highlights can actually be cleared. v1 wrote into
+-- ns_id 0 and never cleared anything, while update_ui re-applied highlights
+-- every second -- extmarks grew without bound for as long as the float stayed
+-- open.
+local NS = ui.namespace
+
+M.namespace = NS
 
 local COLOR_THEME_MAP = {
     red = "TamagotchiColorRed",
@@ -14,340 +24,485 @@ local COLOR_THEME_MAP = {
     white = "TamagotchiColorWhite",
 }
 
-local function get_tabs(pet)
-    local base_hl = "TamagotchiTab1"
+local MIN_GAP = 3
+local MIN_WIDTH = 40
+local BAR_WIDTH = 10
+local LABEL_WIDTH = 7
+
+local function theme_hl(pet)
     if pet and pet.color_theme and COLOR_THEME_MAP[pet.color_theme] then
-        base_hl = COLOR_THEME_MAP[pet.color_theme]
+        return COLOR_THEME_MAP[pet.color_theme]
     end
-    
+    return "TamagotchiLabel"
+end
+
+-- The interaction verbs. Without a row for these they exist only as
+-- :Tamagotchi subcommands, which means nobody finds them.
+local ACTIONS = {
+    { key = "f", label = "feed", verb = "feed" },
+    { key = "p", label = "play", verb = "play" },
+    { key = "t", label = "pet", verb = "pet" },
+    { key = "c", label = "clean", verb = "clean" },
+}
+
+local REVIVE = { key = "R", label = "revive", verb = "revive" }
+
+-- Reset deliberately lives behind the settings screen rather than in this
+-- footer: it can delete every save, which is not a thing to put one keystroke
+-- away from the main window.
+local NAV = {
+    { key = "m", label = "menu" },
+    { key = "s", label = "settings" },
+    { key = "?", label = "help" },
+}
+
+M.ACTIONS = ACTIONS
+M.NAV = NAV
+
+-- Kept on the module because the restored window_spec covers it.
+M.center_text = render.center_text
+
+local function get_actions(pet)
+    -- Nothing to do for a dead pet but bring it back.
+    if pet and pet.is_dead and pet:is_dead() then return { REVIVE } end
+    return ACTIONS
+end
+
+local function separator() return ui.ascii() and " - " or " · " end
+
+local function health_state(pet)
+    if not pet or type(pet.health_state) ~= "function" then return "alive" end
+    local ok, state = pcall(pet.health_state, pet)
+    return ok and state or "alive"
+end
+
+-- Name and age live in the border rather than in the body: they are labels for
+-- the window, and moving them out leaves the body to the two things that
+-- actually change fast enough to watch.
+function M.title_chunks(pet)
+    local state = health_state(pet)
+
+    local name_hl, suffix = "TamagotchiTitle", nil
+    if state == "sick" then
+        name_hl, suffix = "TamagotchiSick", "sick"
+    elseif state == "dead" then
+        name_hl, suffix = "TamagotchiDead", "R.I.P."
+    end
+
+    local parts = {
+        { pet.name or "pet", name_hl },
+        { separator(), "TamagotchiMuted" },
+        { pet:get_age_formatted(), "TamagotchiMuted" },
+    }
+
+    if suffix then
+        parts[#parts + 1] = { separator(), "TamagotchiMuted" }
+        parts[#parts + 1] = { suffix, name_hl }
+    end
+
+    return ui.chunks(parts)
+end
+
+function M.footer_text() return ui.key_text(NAV, separator()) end
+
+local function help_entries(pet)
+    local entries = {}
+    for _, action in ipairs(get_actions(pet)) do
+        entries[#entries + 1] = { key = action.key, label = action.label }
+    end
+    for _, nav in ipairs(NAV) do
+        entries[#entries + 1] = nav
+    end
+    entries[#entries + 1] = { key = "q", label = "close" }
+    return entries
+end
+
+-- Decay is continuous -- 0.05 points a second by default -- so "lower than last
+-- frame" is true every tick and would paint the bar red permanently. A whole
+-- point is the smallest change a bar can draw, so that is what counts as a
+-- fall: one pulse every 20s or so while idling down, immediately when something
+-- takes a chunk out of a stat.
+local FLASH_MS = 2000
+local DROP_POINTS = 1
+
+local TREND_HL = {
+    up = "TamagotchiTrendUp",
+    down = "TamagotchiTrendDown",
+}
+
+local function trend_marker(dir)
+    if ui.ascii() then return ({ up = "^", down = "v" })[dir] or "." end
+    return ({ up = "▲", down = "▼" })[dir] or "·"
+end
+
+-- Reset whenever a float opens, so switching pets or reopening the window does
+-- not flash a change the user never saw happen.
+local trends = {}
+
+function M.reset_trends() trends = {} end
+
+--- Direction to light `key` up in, or nil once the flash has expired.
+---
+--- `now` is milliseconds from any monotonic source; the caller passes
+--- vim.uv.now() and the specs pass their own, so this stays testable without
+--- waiting out a real two seconds.
+function M.trend(key, value, now)
+    local t = trends[key]
+
+    if not t then
+        trends[key] = { value = value, dir = nil, at = nil }
+        return nil
+    end
+
+    if value > t.value then
+        t.value, t.dir, t.at = value, "up", now
+    elseif value <= t.value - DROP_POINTS then
+        t.value, t.dir, t.at = value, "down", now
+    end
+
+    if t.dir and (now - t.at) <= FLASH_MS then return t.dir end
+    return nil
+end
+
+-- Cell spans come back measured off the rendered text rather than recomputed,
+-- so the highlighter cannot drift out of sync with the layout.
+local function stat_row(label, value, dir)
+    local prefix = ("%-" .. LABEL_WIDTH .. "s "):format(label)
+    local bar, filled, bar_from
+
+    if ui.ascii() then
+        bar = render.ascii_bar(value, 100, BAR_WIDTH)
+        filled = math.floor((math.min(value, 100) / 100) * BAR_WIDTH)
+        -- Skip the opening bracket.
+        bar_from = render.display_width(prefix) + 1
+    else
+        bar, filled = render.stat_bar(value, 100, BAR_WIDTH)
+        bar_from = render.display_width(prefix)
+    end
+
+    local head = prefix .. bar .. " "
+    local text = head .. trend_marker(dir)
+
     return {
-        {
-            label = "pet [m]enu",
-            hl_group = base_hl,
-        },
-        {
-            label = "[s]ettings",
-            hl_group = base_hl,
-        },
-        {
-            label = "[r]eset",
-            hl_group = base_hl,
-        },
+        text = text,
+        bar_from = bar_from,
+        filled = filled,
+        width = BAR_WIDTH,
+        value = value,
+        dir = dir,
+        marker_from = render.display_width(head),
+        marker_to = render.display_width(text),
     }
 end
 
-local function ascii_bar(value, max, width)
-    assert(value >= 0, "value must be non-negative")
-    assert(max > 0, "max must be positive")
-    assert(width > 0, "width must be positive")
+local function stat_rows(pet, now)
+    now = now or vim.uv.now()
 
-    local filled = math.floor((value / max) * width)
-    local unfilled = width - filled
-    return "[" .. string.rep("#", filled) .. string.rep("-", unfilled) .. "]"
+    return {
+        stat_row("mood", pet:get_mood(), M.trend("mood", pet:get_mood(), now)),
+        stat_row(
+            "satiety",
+            pet:get_satiety(),
+            M.trend("satiety", pet:get_satiety(), now)
+        ),
+    }
 end
 
--- center `text` within `width` by adding left/right padding.
--- if text is longer than width, it is truncated.
-function M.center_text(text, width)
-    assert(type(text) == "string", "text must be a string")
-    assert(
-        type(width) == "number" and width > 0,
-        "width must be a positive number"
+-- The horizontal layout, computed once and reused by both the line builder and
+-- the highlighter -- v1 duplicated this arithmetic in two places that had to
+-- stay in sync by hand.
+--
+-- All widths are display cells: pet names are user-supplied and sprites use
+-- multibyte glyphs, so byte lengths would misplace both padding and highlights.
+local function layout(pet, width)
+    local box = pet:sprite_box()
+    local rows = stat_rows(pet)
+
+    local info_width = 0
+    for _, row in ipairs(rows) do
+        info_width = math.max(info_width, render.display_width(row.text))
+    end
+
+    local available = width - box.width - info_width
+    local gap = math.max(MIN_GAP, math.floor(available / 3))
+
+    local total_padding = width - box.width - gap - info_width
+    local left_pad = math.max(0, math.floor(total_padding / 2))
+    local right_pad = math.max(0, total_padding - left_pad)
+
+    local content_height = math.max(box.rows, #rows)
+
+    return {
+        box = box,
+        rows = rows,
+        info_width = info_width,
+        gap = gap,
+        left_pad = left_pad,
+        right_pad = right_pad,
+        content_height = content_height,
+        -- Both blocks sit centred against the taller of the two, so a 5-row
+        -- sprite does not leave the stats stuck to the ceiling.
+        sprite_offset = math.floor((content_height - box.rows) / 2),
+        info_offset = math.floor((content_height - #rows) / 2),
+    }
+end
+
+local function build_top_lines(pet, width, sprite_text, l)
+    local sprite_lines = render.normalize_frame(sprite_text or "", l.box)
+    local blank_sprite = string.rep(" ", l.box.width)
+
+    local lines = { string.rep(" ", width) }
+
+    for i = 1, l.content_height do
+        local parts = { string.rep(" ", l.left_pad) }
+
+        parts[#parts + 1] = sprite_lines[i - l.sprite_offset] or blank_sprite
+        parts[#parts + 1] = string.rep(" ", l.gap)
+
+        local row = l.rows[i - l.info_offset]
+        local text = row and row.text or ""
+        parts[#parts + 1] = text
+            .. string.rep(" ", l.info_width - render.display_width(text))
+
+        parts[#parts + 1] = string.rep(" ", l.right_pad)
+        lines[#lines + 1] = table.concat(parts)
+    end
+
+    lines[#lines + 1] = string.rep(" ", width)
+    return lines
+end
+
+-- One row of evenly divided, centred `key label` pairs. The cell spans of each
+-- half come back too, so the key can be highlighted apart from its label --
+-- which is what makes the row read as keys rather than as decoration.
+local function build_action_line(actions, width)
+    if #actions == 0 then return string.rep(" ", width), {} end
+
+    local segment_width = math.floor(width / #actions)
+    local parts, spans = {}, {}
+    local cell = 0
+
+    for i, action in ipairs(actions) do
+        local text = action.key .. " " .. action.label
+        local text_width = math.min(segment_width, render.display_width(text))
+        local key_width = render.display_width(action.key)
+        local lead = math.max(0, math.floor((segment_width - text_width) / 2))
+
+        parts[i] = render.center_text(text, segment_width)
+        spans[i] = {
+            key_from = cell + lead,
+            key_to = cell + lead + key_width,
+            label_from = math.min(
+                cell + lead + key_width + 1,
+                cell + text_width
+            ),
+            label_to = cell + text_width,
+        }
+
+        cell = cell + segment_width
+    end
+
+    local leftover = width - segment_width * #actions
+    if leftover > 0 then
+        parts[#parts] = parts[#parts] .. string.rep(" ", leftover)
+    end
+
+    return table.concat(parts), spans
+end
+
+local byte_offset_of_cell = render.byte_offset
+
+local function hl(buf, lines, row, from_cell, to_cell, group)
+    if not group or to_cell <= from_cell then return end
+
+    local line = lines[row + 1]
+    if not line then return end
+
+    vim.api.nvim_buf_set_extmark(
+        buf,
+        NS,
+        row,
+        byte_offset_of_cell(line, from_cell),
+        {
+            end_col = byte_offset_of_cell(line, to_cell),
+            hl_group = group,
+        }
+    )
+end
+
+local function sprite_row_visible(i, l)
+    return i > l.sprite_offset and i <= l.sprite_offset + l.box.rows
+end
+
+-- At rest a bar reads as its level, so a starving pet looks starving. While a
+-- stat is moving the trend colour takes over label, bar and marker together:
+-- the label is normally grey, so it is what reads as a change even on a bar
+-- that was already that colour.
+local function highlight_stat(buf, lines, row, stat, info_start)
+    local trend_hl = stat.dir and TREND_HL[stat.dir]
+
+    hl(
+        buf,
+        lines,
+        row,
+        info_start,
+        info_start + LABEL_WIDTH,
+        trend_hl or "TamagotchiMuted"
     )
 
-    if #text >= width then     return text:sub(1, width) end
-    local left_pad = math.floor((width - #text) / 2)
-    local right_pad = width - #text - left_pad
-    return string.rep(" ", left_pad) .. text .. string.rep(" ", right_pad)
+    local bar_start = info_start + stat.bar_from
+    hl(
+        buf,
+        lines,
+        row,
+        bar_start,
+        bar_start + stat.filled,
+        trend_hl or render.bar_hl(stat.value, 100)
+    )
+    hl(
+        buf,
+        lines,
+        row,
+        bar_start + stat.filled,
+        bar_start + stat.width,
+        "TamagotchiBarEmpty"
+    )
+
+    hl(
+        buf,
+        lines,
+        row,
+        info_start + stat.marker_from,
+        info_start + stat.marker_to,
+        trend_hl or "TamagotchiTrendFlat"
+    )
 end
 
-local function normalize_sprite(sprite_text)
-    local lines = {}
-    
-    for line in (sprite_text .. "\n"):gmatch("(.-)\n") do
-        table.insert(lines, line)
-    end
-    
-    local min_start = math.huge
-    local max_end = 0
-    
-    for _, line in ipairs(lines) do
-        local trimmed = line:match("^%s*(.-)%s*$")
-        if trimmed ~= "" then
-            -- find where non-whitespace starts and ends
-            local start_pos = line:find("%S")
-            local end_pos = line:find("%s*$") - 1
-            if start_pos then
-                min_start = math.min(min_start, start_pos)
-                max_end = math.max(max_end, end_pos)
-            end
+local function highlight_body(buf, lines, pet, l)
+    local color_hl = pet.color_theme and COLOR_THEME_MAP[pet.color_theme]
+
+    -- Row 0 is the blank top line, so content starts at row 1.
+    for i = 1, l.content_height do
+        local row = i
+
+        if color_hl and sprite_row_visible(i, l) then
+            hl(buf, lines, row, l.left_pad, l.left_pad + l.box.width, color_hl)
+        end
+
+        local stat = l.rows[i - l.info_offset]
+        if stat then
+            highlight_stat(
+                buf,
+                lines,
+                row,
+                stat,
+                l.left_pad + l.box.width + l.gap
+            )
         end
     end
-    
-    if min_start == math.huge then
-        min_start = 1
-        max_end = 0
-        for _, line in ipairs(lines) do
-            max_end = math.max(max_end, #line)
-        end
-    end
-    
-    local content_width = max_end - min_start + 1
-    
-    local normalized = {}
-    for _, line in ipairs(lines) do
-            local content = ""
-            if #line >= min_start then
-                content = line:sub(min_start, math.min(#line, max_end))
-            end
-            if #content < content_width then
-            local padding_needed = content_width - #content
-            local left_pad = math.floor(padding_needed / 2)
-            local right_pad = padding_needed - left_pad
-            content = string.rep(" ", left_pad) .. content .. string.rep(" ", right_pad)
-        end
-        table.insert(normalized, content)
-    end
-    
-    return normalized, content_width, #normalized
 end
 
-local function build_top_lines(pet, width, height, sprite_override)
-    -- normalize sprite to rectangular box
-    local sprite_text = sprite_override or pet:get_sprite()
-    local sprite_lines, sprite_width, sprite_height = normalize_sprite(sprite_text)
-
-    -- prepare info lines
-    local info_lines = {
-        ("name:    %s"):format(pet.name),
-        ("age:     %s"):format(pet:get_age_formatted()),
-        ("satiety: %s"):format(ascii_bar(pet:get_satiety(), 100, 10)),
-        ("mood:    %s"):format(ascii_bar(pet:get_mood(), 100, 10)),
-    }
-    local info_height = #info_lines
-    local info_width = 0
-    for _, line in ipairs(info_lines) do
-        if #line > info_width then info_width = #line end
-    end
-
-    -- calculate content dimensions
-    local content_height = math.max(sprite_height, info_height)
-    
-    -- calculate the gap between sprite and stats to center them with equal padding
-    -- total_content_width = left_pad + sprite_width + gap + info_width + right_pad
-    -- we want: left_pad = right_pad
-    local min_gap = 3
-    local available_space = width - sprite_width - info_width
-    local gap = math.max(min_gap, math.floor(available_space / 3))
-    
-    -- calculate padding to ensure left_pad == right_pad
-    local total_padding = width - sprite_width - gap - info_width
-    local left_pad = math.floor(total_padding / 2)
-    local right_pad = total_padding - left_pad
-    
-    local final_lines = {}
-    
-    -- add 1 empty line at top
-    table.insert(final_lines, string.rep(" ", width))
-    
-    -- build content lines (sprite and stats vertically aligned to top)
-    for i = 1, content_height do
-        local line = string.rep(" ", left_pad)
-        
-        -- add sprite content (or blank if outside sprite bounds)
-        if i <= sprite_height then
-            line = line .. sprite_lines[i]
-        else
-            line = line .. string.rep(" ", sprite_width)
-        end
-        
-        -- add gap between sprite and stats
-        line = line .. string.rep(" ", gap)
-        
-        -- add info content (or blank if outside info bounds)
-        if i <= info_height then
-            line = line .. info_lines[i]
-        else
-            line = line .. string.rep(" ", info_width)
-        end
-        
-        -- add right padding (ensures exact equal padding)
-        line = line .. string.rep(" ", right_pad)
-        
-        table.insert(final_lines, line)
-    end
-    
-    -- add 1 empty line after content
-    table.insert(final_lines, string.rep(" ", width))
-
-    return final_lines
-end
-
--- build the bottom bar line as a single string, then highlight each tab segment
-local function build_bottom_line(tabs, width)
-    local segment_count = #tabs
-
-    -- if no tabs, just blank
-    if segment_count < 1 then return string.rep(" ", width) end
-
-    -- each tab gets an equal portion of width
-    local segment_width = math.floor(width / segment_count)
-    local line_parts = {}
-    local used_cols = 0
-
-    for i, tab in ipairs(tabs) do
-        local text = tab.label
-        -- center text within segment:
-        text = M.center_text(text, segment_width)
-
-        line_parts[i] = text
-        used_cols = used_cols + segment_width
-    end
-
-    -- leftover if width is not perfectly divisible by segment_count
-    local leftover = width - used_cols
-    if leftover > 0 then
-        line_parts[#line_parts] = line_parts[#line_parts]
-            .. string.rep(" ", leftover)
-    end
-
-    return table.concat(line_parts, "")
-end
-
--- applies highlight groups for each tab segment in the bottom bar
-local function highlight_bottom_bar(buf, line_num, tabs, width)
-    local segment_count = #tabs
-    if segment_count < 1 then return end
-
-    local segment_width = math.floor(width / segment_count)
-    local current_col = 0
-
-    for i, tab in ipairs(tabs) do
-        local start_col = current_col
-        local end_col = current_col + segment_width
-        -- leftover for uneven division
-        if i == segment_count then end_col = width end
-
-        vim.api.nvim_buf_add_highlight(
-            buf,
-            0, -- ns_id
-            tab.hl_group,
-            line_num,
-            start_col,
-            end_col
-        )
-        current_col = end_col
+local function highlight_actions(buf, lines, row, spans, group)
+    for _, span in ipairs(spans) do
+        hl(buf, lines, row, span.key_from, span.key_to, "TamagotchiKey")
+        hl(buf, lines, row, span.label_from, span.label_to, group)
     end
 end
 
--- highlight the sprite with the pet's color theme
-local function highlight_sprite(buf, pet, sprite_text, width)
-    if not pet or not pet.color_theme then return end
-    
-    local color_hl = COLOR_THEME_MAP[pet.color_theme]
-    if not color_hl then return end
-    
-    -- normalize sprite to get dimensions (same as build_top_lines)
-    local sprite_lines, sprite_width, sprite_height = normalize_sprite(sprite_text)
-    
-    -- calculate info width (exact same as build_top_lines)
-    local info_lines = {
-        ("name:    %s"):format(pet.name),
-        ("age:     %s"):format(pet:get_age_formatted()),
-        ("satiety: %s"):format(ascii_bar(pet:get_satiety(), 100, 10)),
-        ("mood:    %s"):format(ascii_bar(pet:get_mood(), 100, 10)),
-    }
-    local info_width = 0
-    for _, line in ipairs(info_lines) do
-        if #line > info_width then info_width = #line end
-    end
-    
-    -- calculate left padding (exact same logic as build_top_lines)
-    local min_gap = 3
-    local available_space = width - sprite_width - info_width
-    local gap = math.max(min_gap, math.floor(available_space / 3))
-    local total_padding = width - sprite_width - gap - info_width
-    local left_pad = math.floor(total_padding / 2)
-    
-    -- sprite starts at line 1 (after the top empty line at line 0)
-    for i = 1, sprite_height do
-        local buffer_line_idx = i -- line 1, 2, 3, etc
-        local start_col = left_pad
-        local end_col = left_pad + sprite_width
-        
-        vim.api.nvim_buf_add_highlight(
-            buf,
-            0,
-            color_hl,
-            buffer_line_idx,
-            start_col,
-            end_col
-        )
-    end
-end
-
-local function build_final_lines(pet, width, height, sprite_override, tabs)
-    local top_lines = build_top_lines(pet, width, height, sprite_override)
-
-    local bottom_line = build_bottom_line(tabs, width)
-
-    top_lines[#top_lines + 1] = bottom_line
-    return top_lines
-end
-
--- calculate optimal window dimensions based on pet sprite
+-- Size from the sprite set's bounding box rather than a live frame.
+--
+-- v1 called pet:get_sprite() here, which advances the animation index -- so
+-- measuring consumed a frame and measured a frame other than the one drawn.
 local function calculate_window_dimensions(pet)
-    -- get sprite dimensions
-    local sprite_text = pet:get_sprite()
-    local _, sprite_width, sprite_height = normalize_sprite(sprite_text)
-    
-    -- info section dimensions
-    local info_height = 4 -- we have 4 info lines
-    local info_width = 30 -- approximate, "satiety: [##########]" is ~22 chars
-    
-    -- calculate content dimensions
-    local content_height = math.max(sprite_height, info_height)
-    
-    -- calculate minimum width needed for content with equal padding
-    local min_gap = 3
-    local min_width = sprite_width + min_gap + info_width + 10 -- 10 for side padding
-    
-    -- vertical layout: 1 empty + content + 1 empty + 1 tab bar
-    local total_height = 1 + content_height + 1 + 1
-    
-    -- ensure minimum dimensions
-    local width = math.max(min_width, 40)
-    local height = total_height
-    
+    local l = layout(pet, MIN_WIDTH)
+
+    -- 1 blank + content + 1 blank + rule + action row
+    local height = 1 + l.content_height + 1 + 2
+    local width = math.max(l.box.width + MIN_GAP + l.info_width + 10, MIN_WIDTH)
+
     return width, height
 end
 
--- create the floating window (a scratch buffer)
-local function create_floating_window(pet)
-    local width, height = calculate_window_dimensions(pet)
-    
-    local row = math.floor((vim.o.lines - height) / 2)
-    local col = math.floor((vim.o.columns - width) / 2)
+function M.get_current_pet() return M.current_pet end
 
-    local buf = vim.api.nvim_create_buf(false, true)
-    local opts = {
-        style = "minimal",
-        relative = "editor",
-        width = width,
-        height = height,
-        row = row,
-        col = col,
-        border = "single",
-    }
-
-    local win = vim.api.nvim_open_win(buf, true, opts)
-    vim.api.nvim_win_set_option(win, "wrap", false)
-    vim.api.nvim_buf_set_option(buf, "modifiable", true)
-
-    return { buf = buf, win = win, width = width, height = height }
+-- Checks the window id rather than calling the handle's own is_valid, so a
+-- stubbed window (the tick's period tests use one) does not have to reimplement
+-- the whole handle interface.
+function M.is_open()
+    local handle = M.current_window
+    return handle ~= nil
+        and handle.win ~= nil
+        and vim.api.nvim_win_is_valid(handle.win)
 end
 
-function M.get_current_pet() return M.current_pet end
+-- The single teardown, however the float is disposed of. v1 only saved when the
+-- user pressed `q`; closing with :q dropped the session's progress on the floor
+-- and left the tick running at animation speed.
+local function on_window_closed()
+    local pet = M.current_pet
+
+    M.current_window = nil
+    M.current_pet = nil
+
+    if pet then pcall(require("tamagotchi.store").save_pet, pet) end
+    pcall(require("tamagotchi.tick").retime)
+end
+
+-- The reset flow, exposed so `:Tamagotchi reset` and the settings screen share
+-- it.
+function M.reset_dialogue(pet)
+    local dialogue = require("tamagotchi.dialogue")
+    local store = require("tamagotchi.store")
+
+    pet = pet or _G.tamagotchi_pet
+    if not pet then return end
+
+    dialogue.choice(
+        "reset options",
+        "what would you like to reset?",
+        "reset current pet only",
+        "reset all pets (delete all saves)",
+        function()
+            dialogue.confirm(
+                "reset current pet",
+                "are you sure you want to reset "
+                    .. (pet.name or "your pet")
+                    .. "? this will reset all stats and age to initial values.",
+                function()
+                    pet:reset()
+                    store.save_pet(pet)
+                    M.update_ui(pet, false)
+                    vim.notify("pet has been reset!", vim.log.levels.INFO)
+                end,
+                nil
+            )
+        end,
+        function()
+            dialogue.confirm(
+                "reset all pets",
+                "are you ABSOLUTELY SURE you want to delete ALL pet save files? this cannot be undone!",
+                function()
+                    -- Glob the save directory rather than walking config: v1
+                    -- rebuilt paths from config.pets, so it missed renamed pets
+                    -- and pets the user had since removed from their config.
+                    local deleted = store.delete_all_pets()
+
+                    pet:reset()
+                    store.save_pet(pet)
+                    M.update_ui(pet, false)
+
+                    vim.notify(
+                        ("deleted %d save file(s) and reset current pet!"):format(
+                            deleted
+                        ),
+                        vim.log.levels.WARN
+                    )
+                end,
+                nil
+            )
+        end
+    )
+end
 
 function M.open(pet)
     assert(pet, "pet is required")
@@ -362,305 +517,116 @@ function M.open(pet)
         "pet must have get_sprite method"
     )
 
+    -- Dispose of any existing float first, so its on_close does not clear the
+    -- pet we are about to install.
+    if M.current_window then M.current_window.close() end
+
     M.current_pet = pet
 
-    -- Apply retroactive decay since last window close
-    local elapsed_ms = vim.loop.now() - pet.last_window_close_time
-    local elapsed_seconds = elapsed_ms / 1000
+    -- Nothing has moved yet, so opening never opens on a flash.
+    M.reset_trends()
 
-    -- Calculate expected decay (cap at 10 minutes for window toggles)
-    local max_window_decay_time = 600 -- 10 minutes
-    local effective_time = math.min(elapsed_seconds, max_window_decay_time)
+    -- No retroactive decay here. Decay is charged by elapsed wall time in
+    -- Pet:apply_decay, which the tick already drives; v1 also charged it on
+    -- every window open, double-counting the same seconds.
+    pet:apply_decay()
 
-    local mood_decay = pet.mood_decay_probability * effective_time
-    local satiety_decay = pet.satiety_decay_probability * effective_time
+    local width, height = calculate_window_dimensions(pet)
 
-    pet:set_mood(pet:get_mood() - mood_decay)
-    pet:set_satiety(pet:get_satiety() - satiety_decay)
+    M.current_window = ui.open({
+        width = width,
+        height = height,
+        title = M.title_chunks(pet),
+        footer = ui.key_chunks(NAV, separator()),
+        filetype = "tamagotchi",
+        help = help_entries(pet),
+        on_close = on_window_closed,
+    })
 
-    -- close open window if exists
-    if M.current_window and vim.api.nvim_win_is_valid(M.current_window.win) then
-        vim.api.nvim_win_close(M.current_window.win, true)
-        M.current_window = nil
+    local handle = M.current_window
+
+    handle.map(
+        { "m", "M" },
+        function() require("tamagotchi.menu").open_pet_menu() end
+    )
+    handle.map(
+        { "s", "S" },
+        function() require("tamagotchi.settings").show_settings(M.current_pet) end
+    )
+
+    -- Bound unconditionally, not from get_actions(pet): the row swaps to
+    -- `R revive` when the pet dies, and rebinding on every state change would
+    -- leave the previous state's keys behind.
+    local actions = require("tamagotchi.actions")
+    for _, action in ipairs(ACTIONS) do
+        handle.map(
+            { action.key },
+            function() actions.run(action.verb, M.current_pet) end
+        )
     end
+    handle.map({ "R" }, function() actions.revive(M.current_pet) end)
 
-    M.current_window = create_floating_window(pet)
-
-    local buf = M.current_window.buf
-
-    vim.api.nvim_buf_set_keymap(buf, "n", "m", "", {
-        nowait = true,
-        noremap = true,
-        silent = true,
-        callback = function() require("tamagotchi.menu").open_pet_menu() end,
-    })
-    vim.api.nvim_buf_set_keymap(buf, "n", "M", "", {
-        nowait = true,
-        noremap = true,
-        silent = true,
-        callback = function() require("tamagotchi.menu").open_pet_menu() end,
-    })
-    vim.api.nvim_buf_set_keymap(buf, "n", "s", "", {
-        nowait = true,
-        noremap = true,
-        silent = true,
-        callback = function()
-            require("tamagotchi.settings").show_settings(_G.tamagotchi_pet)
-        end,
-    })
-    vim.api.nvim_buf_set_keymap(buf, "n", "S", "", {
-        nowait = true,
-        noremap = true,
-        silent = true,
-        callback = function()
-            require("tamagotchi.settings").show_settings(_G.tamagotchi_pet)
-        end,
-    })
-    vim.api.nvim_buf_set_keymap(buf, "n", "r", "", {
-        nowait = true,
-        noremap = true,
-        silent = true,
-        callback = function()
-            local dialogue = require("tamagotchi.dialogue")
-            dialogue.choice(
-                "reset options",
-                "what would you like to reset?",
-                "reset current pet only",
-                "reset all pets (delete all saves)",
-                function()
-                    -- reset current pet only
-                    dialogue.confirm(
-                        "reset current pet",
-                        "are you sure you want to reset "
-                            .. (_G.tamagotchi_pet.name or "your pet")
-                            .. "? this will reset all stats and age to initial values.",
-                        function()
-                            _G.tamagotchi_pet:reset()
-                            _G.tamagotchi_pet:save_on_vim_close()
-                            vim.notify(
-                                "pet has been reset!",
-                                vim.log.levels.INFO
-                            )
-                        end,
-                        nil
-                    )
-                end,
-                function()
-                    -- reset all pets (delete all save files)
-                    dialogue.confirm(
-                        "reset all pets",
-                        "are you ABSOLUTELY SURE you want to delete ALL pet save files? this cannot be undone!",
-                        function()
-                            local data_dir = vim.fn.stdpath("data")
-                            local config = require("tamagotchi.config").values
-                            local deleted_count = 0
-
-                            -- delete all pet-specific save files
-                            for _, pet_def in ipairs(config.pets) do
-                                local save_path = data_dir
-                                    .. "/tamagotchi_"
-                                    .. pet_def.name
-                                    .. ".json"
-                                if vim.fn.filereadable(save_path) == 1 then
-                                    vim.fn.delete(save_path)
-                                    deleted_count = deleted_count + 1
-                                end
-                            end
-
-                            -- delete generic save file
-                            local generic_save = data_dir .. "/tamagotchi.json"
-                            if vim.fn.filereadable(generic_save) == 1 then
-                                vim.fn.delete(generic_save)
-                                deleted_count = deleted_count + 1
-                            end
-
-                            -- reset current pet
-                            _G.tamagotchi_pet:reset()
-                            _G.tamagotchi_pet:save_on_vim_close()
-
-                            vim.notify(
-                                "deleted "
-                                    .. deleted_count
-                                    .. " save file(s) and reset current pet!",
-                                vim.log.levels.WARN
-                            )
-                        end,
-                        nil
-                    )
-                end
-            )
-        end,
-    })
     M.update_ui(pet, true)
-    M.start_refresh_loop(pet)
+
+    -- Animation wants a faster tick than the idle loop runs at.
+    require("tamagotchi.tick").retime()
+
     return M.current_window
 end
 
 function M.close(pet)
-    if M.refresh_timer then
-        M.refresh_timer:stop()
-        M.refresh_timer:close()
-        M.refresh_timer = nil
+    if M.current_window then
+        -- on_window_closed saves whatever is current and clears both fields.
+        M.current_window.close()
+    else
+        M.current_pet = nil
+        if pet then pcall(require("tamagotchi.store").save_pet, pet) end
     end
-
-    if pet then pet:save_on_window_close() end
-
-    if M.current_window and vim.api.nvim_win_is_valid(M.current_window.win) then
-        vim.api.nvim_win_close(M.current_window.win, true)
-    end
-    M.current_window = nil
 end
 
--- update the buffer lines for the currently open window
 function M.update_ui(pet, update_sprite)
-    if
-        not (
-            M.current_window and vim.api.nvim_win_is_valid(M.current_window.win)
-        )
-    then
-        return
+    if not M.is_open() then return end
+
+    local tick = require("tamagotchi.tick")
+    local handle = M.current_window
+    local width = handle.width
+    local buf = handle.buf
+
+    if update_sprite or tick.last_sprite == "" then
+        tick.last_sprite = pet:get_sprite()
     end
 
-    local width = M.current_window.width
-    local height = M.current_window.height
+    local l = layout(pet, width)
+    local lines = build_top_lines(pet, width, tick.last_sprite or "", l)
 
-    if update_sprite then M.last_sprite = pet:get_sprite() end
+    lines[#lines + 1] = handle.rule
+    local action_line, spans = build_action_line(get_actions(pet), width)
+    lines[#lines + 1] = action_line
 
-    local tabs = get_tabs(pet)
-    local sprite_to_use = M.last_sprite or ""
-    local final_lines =
-        build_final_lines(pet, width, height, sprite_to_use, tabs)
+    handle.set_lines(lines)
 
-    vim.api.nvim_buf_set_lines(M.current_window.buf, 0, -1, false, final_lines)
+    -- The age ticks over in the title; both setters no-op when unchanged.
+    handle.set_title(M.title_chunks(pet))
 
-    -- highlight the sprite with the pet's color
-    highlight_sprite(M.current_window.buf, pet, sprite_to_use, width)
-    
-    local bottom_line_idx = #final_lines - 1
-    highlight_bottom_bar(M.current_window.buf, bottom_line_idx, tabs, width)
+    vim.api.nvim_buf_clear_namespace(buf, NS, 0, -1)
+    highlight_body(buf, lines, pet, l)
+    hl(buf, lines, #lines - 2, 0, width, "TamagotchiRule")
+    highlight_actions(buf, lines, #lines - 1, spans, theme_hl(pet))
+end
+
+-- Called by the tick. A no-op when there is nothing on screen, so the tick can
+-- keep running with no window open.
+function M.on_tick(pet, update_sprite)
+    if not M.is_open() then return end
+    M.update_ui(pet, update_sprite)
 end
 
 function M.toggle(pet)
-    if M.current_window and vim.api.nvim_win_is_valid(M.current_window.win) then
+    if M.is_open() then
         M.close(pet)
         return nil
-    else
-        return M.open(pet)
     end
-end
-
-function M.start_refresh_loop(pet)
-    assert(pet, "pet is required for refresh loop")
-    assert(
-        type(pet.sprite_update_interval) == "number",
-        "pet must have sprite_update_interval"
-    )
-
-    local sprite_interval = pet.sprite_update_interval
-
-    -- Start at interval so it prints on initial tick
-    M.sprite_counter = sprite_interval
-    M.last_sprite = ""
-
-    -- Stop existing timer if any
-    if M.refresh_timer then
-        M.refresh_timer:stop()
-        M.refresh_timer:close()
-        M.refresh_timer = nil
-    end
-
-    local config = require("tamagotchi.config").values
-    assert(config.tick_length_ms, "tick_length_ms not found in config")
-
-    M.refresh_timer = vim.loop.new_timer()
-    M.refresh_timer:start(
-        0,
-        config.tick_length_ms,
-        vim.schedule_wrap(function()
-            -- Update pet state
-            if pet and pet.update then pet:update() end
-
-            M.sprite_counter = (M.sprite_counter or 0) + 1
-            local update_sprite = false
-            if M.sprite_counter >= sprite_interval then
-                M.sprite_counter = 0
-                update_sprite = true
-            end
-
-            -- Refresh UI if still open
-            if
-                M.current_window
-                and vim.api.nvim_win_is_valid(M.current_window.win)
-            then
-                M.update_ui(pet, update_sprite)
-            else
-                -- Stop timer if window was closed
-                M.close(pet)
-            end
-        end)
-    )
-end
-
-M.tabs = {
-    {
-        label = "pet [m]enu",
-        hl_group = "TamagotchiTab1",
-    },
-    {
-        label = "[s]ettings",
-        hl_group = "TamagotchiTab2",
-    },
-    {
-        label = "[r]eset",
-        hl_group = "TamagotchiTab3",
-    },
-}
-
--- draw the bottom tab bar
-function M.draw_bottom_bar(buf, line_num, tabs)
-    -- build the text line for all tabs
-    local segments = {}
-    for _, tab in ipairs(tabs) do
-        -- e.g. "[P]Pet Select", then separate with " | "
-        table.insert(segments, tab.label)
-    end
-
-    -- might want to add " | " between them:
-    local line_text = table.concat(segments, " |t ")
-
-    -- set this line in the buffer
-    vim.api.nvim_buf_set_lines(
-        buf,
-        line_num,
-        line_num + 1,
-        false,
-        { line_text }
-    )
-
-    -- highlight each tab segment in the line
-    local current_col = 0
-    for i, tab in ipairs(tabs) do
-        local segment_text = tab.label
-        local segment_len = #segment_text
-
-        -- highlight from current_col (inclusive) to current_col+segment_len (exclusive)
-        vim.api.nvim_buf_add_highlight(
-            buf,
-            0, -- ns_id = 0 for the global namespace
-            tab.hl_group,
-            line_num,
-            current_col,
-            current_col + segment_len
-        )
-
-        current_col = current_col + segment_len
-
-        -- add " | " if not last
-        if i < #tabs then
-            local separator_len = 3
-            current_col = current_col + separator_len
-        end
-    end
+    return M.open(pet)
 end
 
 return M

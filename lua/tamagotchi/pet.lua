@@ -1,7 +1,19 @@
+local render = require("tamagotchi.render")
+
 local Pet = {}
 Pet.__index = Pet
 
-local DECAY_CLASSES = {
+Pet.MIN_STAT = 1
+Pet.MAX_STAT = 100
+
+-- Bumped when the on-disk shape changes. v1 files have no version field.
+Pet.SCHEMA_VERSION = 2
+
+-- Points lost per second. These are the v1 numbers unchanged: they used to be
+-- "probability of losing 1 point on a 1s tick", whose expected value is already
+-- points-per-second, so switching from a coin flip to rate x elapsed leaves the
+-- average decay identical.
+local DECAY_RATES = {
     [0] = { mood = 0.0, satiety = 0.0 },
     [1] = { mood = 0.01, satiety = 0.01 },
     [2] = { mood = 0.03, satiety = 0.03 },
@@ -10,6 +22,64 @@ local DECAY_CLASSES = {
     [5] = { mood = 0.12, satiety = 0.12 },
     [6] = { mood = 0.20, satiety = 0.20 },
 }
+
+local DEFAULT_DECAY_SPEED = 3
+local DEFAULT_SPRITE_INTERVAL = 5
+
+-- Copied from a config pet definition.
+local DEF_FIELDS = {
+    "name",
+    "sprites",
+    "vim_events",
+    "sprite_update_interval",
+    "initial_mood",
+    "initial_satiety",
+    "decay_speed",
+    "native",
+}
+
+-- Persisted to disk, and the allowlist `to_table` serializes.
+--
+-- Deliberately excludes `sprites` and `vim_events`: v1 wrote the whole sprite
+-- table into every save (tens of KB of ASCII art), and worse, on load the
+-- constructor then saw `sprites` already set and skipped re-resolving it from
+-- config -- so sprite improvements shipped in an upgrade never reached an
+-- existing pet.
+--
+-- Also excludes `session_start_time`, which must be per-session; v1 round-tripped
+-- it, so the settings screen reported the save file's lifetime as session time.
+local SAVE_FIELDS = {
+    "name",
+    "mood",
+    "satiety",
+    "birth_time",
+    "last_decay_time",
+    "last_seen_time",
+    "color_theme",
+    "decay_speed",
+    "initial_mood",
+    "initial_satiety",
+    "sprite_update_interval",
+    "total_vim_events",
+    "total_mood_gained",
+    "total_satiety_gained",
+    "times_fed",
+    "times_played_with",
+    "times_petted",
+    "times_cleaned",
+    "last_interaction",
+    "interaction_streak",
+    "low_since",
+    "died_at",
+    "schema_version",
+}
+
+Pet.DEF_FIELDS = DEF_FIELDS
+Pet.SAVE_FIELDS = SAVE_FIELDS
+
+local function clamp(value)
+    return math.max(Pet.MIN_STAT, math.min(Pet.MAX_STAT, value))
+end
 
 local function find_pet_def_by_name(name)
     local config = require("tamagotchi.config").values
@@ -22,63 +92,123 @@ local function find_pet_def_by_name(name)
     return nil
 end
 
+-- Counters that simply start at zero.
+local ZERO_FIELDS = {
+    "total_vim_events",
+    "total_mood_gained",
+    "total_satiety_gained",
+    "times_fed",
+    "times_played_with",
+    "times_petted",
+    "times_cleaned",
+}
+
+-- Timestamps that default to "now" when absent.
+local NOW_FIELDS = { "birth_time", "last_decay_time", "last_seen_time" }
+
+-- Sprites and events always come from config, never from a save file, so a
+-- plugin upgrade that improves the art reaches existing pets.
+local function resolve_from_config(p)
+    local pet_def = p.name and find_pet_def_by_name(p.name)
+    if pet_def then
+        p.sprites = p.sprites or pet_def.sprites
+        p.vim_events = p.vim_events or pet_def.vim_events
+
+        -- A pet's colour is part of its art, so a save written before the
+        -- defaults existed still picks one up. A colour the user chose in
+        -- settings is already non-nil here, and wins.
+        if p.color_theme == nil then p.color_theme = pet_def.color_theme end
+    end
+
+    if p.sprites then return end
+
+    vim.notify(
+        string.format(
+            "pet '%s' has no sprites! using empty sprite sets.",
+            p.name or "unknown"
+        ),
+        vim.log.levels.DEBUG
+    )
+    p.sprites = { happy = {}, hungry = {}, neutral = {} }
+end
+
+local function apply_decay_rates(p, config)
+    if p.decay_speed == nil then p.decay_speed = DEFAULT_DECAY_SPEED end
+
+    local rates = DECAY_RATES[p.decay_speed] or DECAY_RATES[DEFAULT_DECAY_SPEED]
+    p.mood_decay_rate = rates.mood
+    p.satiety_decay_rate = rates.satiety
+    p.max_offline_decay_seconds = config.max_offline_decay_seconds or (8 * 3600)
+end
+
+local function apply_defaults(p, config)
+    p.initial_mood = p.initial_mood or config.initial_mood or 80
+    p.initial_satiety = p.initial_satiety or config.initial_satiety or 80
+    p.mood = p.mood or p.initial_mood
+    p.satiety = p.satiety or p.initial_satiety
+
+    p.sprite_update_interval = p.sprite_update_interval
+        or DEFAULT_SPRITE_INTERVAL
+
+    apply_decay_rates(p, config)
+
+    local now = os.time()
+    for _, k in ipairs(NOW_FIELDS) do
+        p[k] = p[k] or now
+    end
+    for _, k in ipairs(ZERO_FIELDS) do
+        p[k] = p[k] or 0
+    end
+
+    p.last_interaction = p.last_interaction or {}
+    p.interaction_streak = p.interaction_streak or {}
+
+    -- Always fresh: this measures the current editing session, not the save.
+    p.session_start_time = now
+end
+
 function Pet:new(o)
     o = o or {}
-    setmetatable(o, self)
-    self.__index = self
 
-    local config = require("tamagotchi.config").values
+    -- A fresh table, never `o` itself. v1 called setmetatable(o, self) where `o`
+    -- *was* config.values.pets[i], which turned the config definition into the
+    -- live pet: two Pet:new calls on one def returned the same object, and
+    -- "start new life" silently inherited the previous life's stats.
+    local p = setmetatable({}, Pet)
 
-    if not o.name then
+    for _, k in ipairs(DEF_FIELDS) do
+        p[k] = o[k]
+    end
+    for _, k in ipairs(SAVE_FIELDS) do
+        if o[k] ~= nil then p[k] = o[k] end
+    end
+
+    if not p.name then
         vim.notify("pet created without a name!", vim.log.levels.DEBUG)
     end
 
-    if not o.sprites and o.name then
-        local pet_def = find_pet_def_by_name(o.name)
-        if pet_def and pet_def.sprites then             o.sprites = pet_def.sprites end
+    resolve_from_config(p)
+    apply_defaults(p, require("tamagotchi.config").values)
+
+    p.schema_version = Pet.SCHEMA_VERSION
+
+    -- Per-instance animation cursor; never shared, never persisted.
+    p.sprite_indices = { happy = 1, hungry = 1, neutral = 1 }
+    p.last_state = nil
+
+    return p
+end
+
+-- Build a pet from a config definition. Same as `new`, but says what it means.
+function Pet.from_def(def, overrides)
+    local seed = {}
+    for k, v in pairs(def or {}) do
+        seed[k] = v
     end
-
-    if not o.sprites then
-        vim.notify(
-            string.format(
-                "pet '%s' has no sprites! using empty sprite sets.",
-                o.name or "unknown"
-            ),
-            vim.log.levels.DEBUG
-        )
-        o.sprites = { happy = {}, hungry = {}, neutral = {} }
+    for k, v in pairs(overrides or {}) do
+        seed[k] = v
     end
-
-    o.initial_mood = o.initial_mood or config.initial_mood or 80
-    o.initial_satiety = o.initial_satiety or config.initial_satiety or 80
-    o.mood = o.mood or o.initial_mood
-    o.satiety = o.satiety or o.initial_satiety
-
-    o.tick_length_ms = o.tick_length_ms or 100
-    o.sprite_update_interval = o.sprite_update_interval or 5
-    o.birth_time = o.birth_time or vim.loop.now()
-
-    o.decay_speed = (o.decay_speed ~= nil) and o.decay_speed or 3
-    local class_vals = DECAY_CLASSES[o.decay_speed] or DECAY_CLASSES[3]
-    o.mood_decay_probability = class_vals.mood
-    o.satiety_decay_probability = class_vals.satiety
-
-    o.sprite_indices = { happy = 1, hungry = 1, neutral = 1 }
-    o.last_state = nil
-
-    o.last_vim_close_time = o.last_vim_close_time or vim.loop.now()
-    o.last_window_close_time = o.last_window_close_time or vim.loop.now()
-
-    o.session_start_time = o.session_start_time or vim.loop.now()
-    o.total_vim_events = o.total_vim_events or 0
-    o.total_mood_gained = o.total_mood_gained or 0
-    o.total_satiety_gained = o.total_satiety_gained or 0
-    o.times_fed = o.times_fed or 0
-    o.times_played_with = o.times_played_with or 0
-
-    o.color_theme = o.color_theme or nil
-
-    return o
+    return Pet:new(seed)
 end
 
 function Pet:set_name(value)
@@ -93,20 +223,20 @@ function Pet:get_satiety() return self.satiety end
 
 function Pet:set_satiety(value)
     assert(type(value) == "number", "satiety must be a number")
-    self.satiety = math.max(1, math.min(100, value))
+    self.satiety = clamp(value)
 end
 
 function Pet:get_mood() return self.mood end
 
 function Pet:set_mood(value)
     assert(type(value) == "number", "mood must be a number")
-    self.mood = math.max(1, math.min(100, value))
+    self.mood = clamp(value)
 end
 
-function Pet:get_age() return ((vim.loop.now() - self.birth_time) / 1000) end
+function Pet:get_age(now) return (now or os.time()) - self.birth_time end
 
-function Pet:get_age_formatted()
-    local elapsed = math.floor(self:get_age())
+function Pet:get_age_formatted(now)
+    local elapsed = math.max(0, math.floor(self:get_age(now)))
 
     local years = math.floor(elapsed / (365 * 24 * 3600))
     elapsed = elapsed - years * 365 * 24 * 3600
@@ -139,26 +269,99 @@ function Pet:get_age_formatted()
     return table.concat(parts, " ")
 end
 
+-- Serialize only the allowlisted fields.
 function Pet:to_table()
     local t = {}
-    for key, value in pairs(self) do
-        t[key] = value
+    for _, k in ipairs(SAVE_FIELDS) do
+        if self[k] ~= nil then t[k] = self[k] end
     end
     return t
 end
 
-function Pet:update()
-    -- Use separate random values to avoid correlation between mood and satiety decay
-    local rand_mood = math.random()
-    if rand_mood < self.mood_decay_probability then
-        self:set_mood(math.max(10, self.mood - 1))
+-- Charge the pet for wall-clock time since it was last charged.
+--
+-- Idempotent over wall time: calling this twice in the same second is a no-op,
+-- and N calls across an interval cost exactly what one call at the end would.
+-- That property is why v1's three separate retroactive-decay approximations
+-- (on load, on window open, and per tick, each with its own cap and floor)
+-- collapse into this single method.
+-- Stats at or below this count as neglect, and start the illness clock.
+Pet.LOW_STAT = 10
+
+function Pet:is_neglected()
+    return self.mood <= Pet.LOW_STAT or self.satiety <= Pet.LOW_STAT
+end
+
+-- "alive" | "sick" | "dead", derived from how long the pet has been neglected.
+--
+-- Elapsed-based rather than tick-counted, so it behaves the same whether you
+-- left Neovim running or closed it. Returns "alive" unless `stakes` is enabled.
+function Pet:health_state(now)
+    local config = require("tamagotchi.config").values
+    if not config.stakes then return "alive" end
+
+    if self.died_at then return "dead" end
+    if not self.low_since then return "alive" end
+
+    local neglected_for = (now or os.time()) - self.low_since
+
+    if neglected_for >= (config.death_after_seconds or 24 * 3600) then
+        return "dead"
+    end
+    if neglected_for >= (config.sick_after_seconds or 6 * 3600) then
+        return "sick"
+    end
+    return "alive"
+end
+
+function Pet:is_dead() return self:health_state() == "dead" end
+
+function Pet:apply_decay(now)
+    now = now or os.time()
+    local elapsed = now - (self.last_decay_time or now)
+
+    -- Advance unconditionally, including when the cap below bites. Otherwise a
+    -- week away is charged the cap, then charged it again on the next tick.
+    self.last_decay_time = now
+
+    if elapsed <= 0 then return 0, 0 end
+
+    -- A dead pet stops decaying; there is nothing left to lose.
+    if self:health_state(now) == "dead" then
+        self.died_at = self.died_at or now
+        return 0, 0
     end
 
-    local rand_satiety = math.random()
-    if rand_satiety < self.satiety_decay_probability then
-        self:set_satiety(math.max(10, self.satiety - 1))
+    local effective = math.min(elapsed, self.max_offline_decay_seconds)
+    local mood_lost = self.mood_decay_rate * effective
+    local satiety_lost = self.satiety_decay_rate * effective
+
+    self:set_mood(self.mood - mood_lost)
+    self:set_satiety(self.satiety - satiety_lost)
+
+    -- Track when neglect began, and clear it the moment either stat recovers,
+    -- so a fed pet resets its illness clock rather than carrying it forever.
+    if self:is_neglected() then
+        self.low_since = self.low_since or now
+    else
+        self.low_since = nil
     end
+
+    return mood_lost, satiety_lost
 end
+
+-- Bring a dead pet back, resetting stats and the illness clock.
+function Pet:revive(now)
+    now = now or os.time()
+    self.died_at = nil
+    self.low_since = nil
+    self:set_mood(self.initial_mood)
+    self:set_satiety(self.initial_satiety)
+    self.last_decay_time = now
+end
+
+-- Kept for the tick loop and for callers that predate apply_decay.
+function Pet:update(now) return self:apply_decay(now) end
 
 function Pet:increase_mood(amount)
     amount = amount or 1
@@ -166,7 +369,6 @@ function Pet:increase_mood(amount)
     assert(amount >= 0, "amount must be non-negative")
     self:set_mood(self.mood + amount)
     self.total_mood_gained = (self.total_mood_gained or 0) + amount
-    self.times_played_with = (self.times_played_with or 0) + 1
 end
 
 function Pet:increase_satiety(amount)
@@ -175,35 +377,43 @@ function Pet:increase_satiety(amount)
     assert(amount >= 0, "amount must be non-negative")
     self:set_satiety(self.satiety + amount)
     self.total_satiety_gained = (self.total_satiety_gained or 0) + amount
-    self.times_fed = (self.times_fed or 0) + 1
 end
 
 function Pet:record_event()
     self.total_vim_events = (self.total_vim_events or 0) + 1
 end
 
-function Pet:get_session_duration()
-    return (vim.loop.now() - (self.session_start_time or vim.loop.now())) / 1000
+function Pet:get_session_duration(now)
+    now = now or os.time()
+    return now - (self.session_start_time or now)
 end
 
-function Pet:reset()
+function Pet:reset(now)
+    now = now or os.time()
+
     self.mood = self.initial_mood
     self.satiety = self.initial_satiety
-    self.birth_time = vim.loop.now()
-    self.session_start_time = vim.loop.now()
-    self.last_vim_close_time = vim.loop.now()
-    self.last_window_close_time = vim.loop.now()
+    self.birth_time = now
+    self.session_start_time = now
+    self.last_decay_time = now
+    self.last_seen_time = now
 
-    self.total_vim_events = 0
-    self.total_mood_gained = 0
-    self.total_satiety_gained = 0
-    self.times_fed = 0
-    self.times_played_with = 0
+    for _, k in ipairs(ZERO_FIELDS) do
+        self[k] = 0
+    end
+
+    self.last_interaction = {}
+    self.interaction_streak = {}
+    self.low_since = nil
+    self.died_at = nil
 
     self.sprite_indices = { happy = 1, hungry = 1, neutral = 1 }
     self.last_state = nil
-    
-    self.color_theme = nil
+
+    -- Back to the definition's colour, not to no colour: every native pet has
+    -- one, so clearing the field outright would leave a reset pet grey.
+    local pet_def = self.name and find_pet_def_by_name(self.name)
+    self.color_theme = pet_def and pet_def.color_theme or nil
 end
 
 function Pet:transfer_stats_to(target_pet)
@@ -211,8 +421,8 @@ function Pet:transfer_stats_to(target_pet)
     target_pet.satiety = self.satiety
     target_pet.birth_time = self.birth_time
     target_pet.session_start_time = self.session_start_time
-    target_pet.last_vim_close_time = self.last_vim_close_time
-    target_pet.last_window_close_time = self.last_window_close_time
+    target_pet.last_decay_time = self.last_decay_time
+    target_pet.last_seen_time = self.last_seen_time
 
     target_pet.total_vim_events = self.total_vim_events
     target_pet.total_mood_gained = self.total_mood_gained
@@ -222,6 +432,10 @@ function Pet:transfer_stats_to(target_pet)
 end
 
 local function determine_state(pet)
+    -- Only reachable with `stakes` enabled; health_state returns "alive" otherwise.
+    local health = pet:health_state()
+    if health ~= "alive" then return health end
+
     if pet.satiety < 70 then
         return "hungry"
     elseif pet.mood > 70 then
@@ -229,6 +443,34 @@ local function determine_state(pet)
     else
         return "neutral"
     end
+end
+
+Pet.determine_state = determine_state
+
+-- Frames for `state`, falling back to the shared sick/dead art for sprite sets
+-- that do not define their own -- which is all user-authored ones.
+function Pet:frames_for(state)
+    local frames = self.sprites[state]
+    if frames and #frames > 0 then return frames end
+
+    if state == "sick" or state == "dead" then
+        return require("tamagotchi.sprites.states")[state]
+    end
+
+    return frames or {}
+end
+
+-- The frame that would be shown next, without advancing the animation.
+--
+-- Window sizing used to call get_sprite(), whose index bump meant measuring
+-- consumed a frame and measured a different frame than the one drawn.
+function Pet:peek_sprite()
+    local state = determine_state(self)
+    local sprite_list = self:frames_for(state)
+    if #sprite_list == 0 then return "" end
+
+    local idx = self.sprite_indices[state] or 1
+    return sprite_list[idx] or sprite_list[1]
 end
 
 function Pet:get_sprite()
@@ -239,7 +481,7 @@ function Pet:get_sprite()
         self.sprite_indices[state] = 1
     end
 
-    local sprite_list = self.sprites[state] or {}
+    local sprite_list = self:frames_for(state)
     if #sprite_list == 0 then return "" end
 
     local idx = self.sprite_indices[state] or 1
@@ -250,61 +492,84 @@ function Pet:get_sprite()
     return sprite
 end
 
-function Pet:save_on_vim_close(filepath)
-    self.last_vim_close_time = vim.loop.now()
-    self:store(filepath)
-end
+-- One bounding box covering every state this pet can display, cached per
+-- instance. Sizing every frame to this is what keeps the art from sliding
+-- sideways as it animates, and keeps the window from resizing on a state change.
+function Pet:sprite_box()
+    if self._sprite_box then return self._sprite_box end
 
-function Pet:save_on_window_close(filepath)
-    self.last_window_close_time = vim.loop.now()
-    self:store(filepath)
-end
-
-function Pet:get_save_path()
-    local base_dir = vim.fn.stdpath("data")
-    if self.name and #self.name > 0 then
-        return base_dir .. "/tamagotchi_" .. self.name .. ".json"
-    else
-        return base_dir .. "/tamagotchi.json"
+    local all = {}
+    for state, frames in pairs(self.sprites or {}) do
+        all[state] = frames
     end
+
+    -- Include the shared fallbacks only when they could actually be shown.
+    if require("tamagotchi.config").values.stakes then
+        for _, state in ipairs({ "sick", "dead" }) do
+            all[state] = self:frames_for(state)
+        end
+    end
+
+    self._sprite_box = render.sprite_box(all)
+    return self._sprite_box
 end
 
-function Pet:store(filepath)
-    filepath = filepath or self:get_save_path()
+-- Convert a v1 save (or an unversioned table) into the v2 shape.
+function Pet.migrate(data)
+    if type(data) ~= "table" then return nil end
+    if data.schema_version == Pet.SCHEMA_VERSION then return data end
 
-    local dir = vim.fn.fnamemodify(filepath, ":h")
-    if vim.fn.isdirectory(dir) == 0 then vim.fn.mkdir(dir, "p") end
+    local now = os.time()
 
-    local data = vim.fn.json_encode(self:to_table())
-    vim.fn.writefile({ data }, filepath)
-end
+    -- v1 persisted vim.loop.now() -- monotonic milliseconds since boot -- then
+    -- compared it against a fresh process's clock. Epoch seconds are bounded on
+    -- both sides, so a magnitude test separates the two except for saves written
+    -- when uptime happened to be around 20 days.
+    local EPOCH_FLOOR = 1735689600 -- 2025-01-01, before this plugin existed
+    local function plausible_epoch(ts)
+        return type(ts) == "number" and ts >= EPOCH_FLOOR and ts <= now + 86400 -- tolerate a day of clock skew
+    end
 
-function Pet.load_on_vim_open(filepath)
-    filepath = filepath or (vim.fn.stdpath("data") .. "/tamagotchi.json")
+    -- birth_time and last_vim_close_time came off the same monotonic clock, so
+    -- their difference is a valid duration even though neither value is. That
+    -- recovers exactly as much history as v1 was actually tracking.
+    local age = 0
+    local birth, closed = data.birth_time, data.last_vim_close_time
+    if
+        type(birth) == "number"
+        and type(closed) == "number"
+        and closed >= birth
+    then
+        local seconds = (closed - birth) / 1000
+        if seconds >= 0 and seconds <= 90 * 86400 then
+            age = math.floor(seconds)
+        end
+    end
+    data.birth_time = plausible_epoch(birth) and birth or (now - age)
 
-    if vim.fn.filereadable(filepath) == 0 then return nil end
+    -- Never charge retroactive decay across a migration.
+    data.last_decay_time = now
+    data.last_seen_time = now
+    data.session_start_time = nil
+    data.last_vim_close_time = nil
+    data.last_window_close_time = nil
 
-    local lines = vim.fn.readfile(filepath)
-    if not lines or #lines == 0 then return nil end
+    -- v1 raw-wrote `pet.mood = math.max(10, pet.mood - decay)`, bypassing the
+    -- setter's upper clamp, so a negative elapsed inflated stats without bound.
+    data.mood = clamp(tonumber(data.mood) or tonumber(data.initial_mood) or 80)
+    data.satiety =
+        clamp(tonumber(data.satiety) or tonumber(data.initial_satiety) or 80)
 
-    local content = table.concat(lines, "")
-    local status, data = pcall(vim.fn.json_decode, content)
-    if not status or type(data) ~= "table" then return nil end
+    -- Stale copies of things that must come from config, not from disk.
+    data.sprites = nil
+    data.vim_events = nil
+    data.native = nil
+    data.mood_decay_probability = nil
+    data.satiety_decay_probability = nil
+    data.tick_length_ms = nil
 
-    local pet = Pet:new(data)
-
-    local elapsed_seconds = (vim.loop.now() - pet.last_vim_close_time) / 1000
-
-    local max_decay_time = 3600
-    local effective_time = math.min(elapsed_seconds, max_decay_time)
-
-    local mood_decay = pet.mood_decay_probability * effective_time
-    local satiety_decay = pet.satiety_decay_probability * effective_time
-
-    pet.mood = math.max(10, pet.mood - mood_decay)
-    pet.satiety = math.max(10, pet.satiety - satiety_decay)
-
-    return pet
+    data.schema_version = Pet.SCHEMA_VERSION
+    return data
 end
 
 return Pet

@@ -5,10 +5,14 @@ is a configurable plugin for raising pets across Neovim sessions.
 https://github.com/user-attachments/assets/8462955d-ad6c-4499-9d9f-8265ba00fd0f
 
 ## Features
-- Floating Window UI: Displays your pet with sprite animations, stats, and a colored bottom bar with interactive tabs.
-- Customizable Behavior: Configure tick length, decay probabilities, and Vim events that affect your pet's mood and satiety.
+- Floating Window UI: Displays your pet with sprite animations, stat bars, and a row of interaction keys. Follows your colorscheme and your `'winborder'`.
+- Customizable Behavior: Configure tick length, decay speed, and Vim events that affect your pet's mood and satiety.
 - Multiple Pets: Manage a list of pets, select different ones from a menu, view more info, and reset as needed.
-- Persistent State: Your pet's mood and satiety persist across Neovim sessions.
+- Persistent State: Your pet's mood, satiety, and age persist across Neovim sessions.
+- Statusline Component: Keep an eye on your pet without opening a window.
+- Interactions: Feed, play with, pet, and clean your pet directly.
+
+Requires Neovim 0.10 or newer.
 
 ## Installation
 
@@ -30,19 +34,94 @@ use { "raquentin/tamagotchi.nvim", }
 { "raquentin/tamagotchi.nvim", }
 ```
 
+No setup call is required. If you never call `setup()`, the plugin initializes
+itself with defaults on `VimEnter`.
+
+## Usage
+
+Press `<leader>tg` to toggle the pet window, or use `:Tamagotchi`.
+
+| command | what it does |
+| --- | --- |
+| `:Tamagotchi` | toggle the pet window |
+| `:Tamagotchi open` / `close` | open or close it explicitly |
+| `:Tamagotchi menu` | pick a different pet |
+| `:Tamagotchi settings` | stats, rename, color theme, reset |
+| `:Tamagotchi reset` | reset this pet, or delete every save |
+| `:Tamagotchi feed` / `play` / `pet` / `clean` | interact with your pet |
+| `:Tamagotchi revive` | bring back a pet that died (see [stakes](#stakes)) |
+| `:checkhealth tamagotchi` | diagnose config, storage, and keymap problems |
+
+Inside the pet window:
+
+```
+╭──────────── Sasha · 2h 14m ────────────╮
+│                                        │
+│      /\_/\      mood    ███████▌░░ ▲    │
+│     ( o.o )     satiety █████░░░░░ ·    │
+│      > ^ <                             │
+│                                        │
+│────────────────────────────────────────│
+│  f feed    p play    t pet    c clean  │
+╰────── m menu · s settings · ? help ────╯
+```
+
+The name and age label the window, the two bars are the things worth watching,
+and the verbs sit on the bottom row. `?` opens the key list, `q` closes. Every
+float in the plugin answers the same three: `?`, `q`, `<Esc>`.
+
+A resting bar is colored by how full it is — green above 60, yellow above 25,
+red below — so a starving pet looks starving. When a stat actually moves, the
+label, the bar and the marker all turn green (`▲`) or red (`▼`) together for two
+seconds; `·` means nothing has changed recently. Decay is fractional, so a fall
+only registers once a whole point has gone, which is about every 20s at the
+default decay speed.
+
+Reset lives inside settings (`x`), not on the main window — it can delete every
+save. If your pet has died, the action row becomes `R revive`.
+
+Each interaction has a cooldown, and repeating one in quick succession gives
+diminishing returns — you can't top a bar up by spamming `:Tamagotchi feed`.
+
 ## Configuration
 
 ```lua
 require('tamagotchi').setup({
-  window_toggle_keybind = "<leader>tg",
-  tick_length_ms = 1000, -- 1 second per tick
-  default_pet = "Lucy",
+  window_toggle_keybind = "<leader>tg", -- false to bind nothing
+  tick_length_ms = 1000,                -- while the window is open
+  idle_tick_ms = 60000,                 -- while it is not
+  default_pet = "Sasha",
+  max_offline_decay_seconds = 8 * 3600, -- cap on time-away decay
+
+  -- see "stakes" below
+  stakes = false,
+  sick_after_seconds = 6 * 3600,
+  death_after_seconds = 24 * 3600,
+
+  ui = {
+    -- "auto" follows 'winborder' if you have set it, else rounded. Anything
+    -- nvim_open_win accepts works here, including a table of glyphs.
+    border = "auto",
+    -- Draw bars and rules in ASCII, for fonts that render the block glyphs
+    -- badly.
+    ascii = false,
+  },
+
+  -- "builtin" is the animated menu with sprite previews; "native" hands the
+  -- pet list to vim.ui.select, so telescope / snacks / fzf-lua users get the
+  -- picker they already configured.
+  picker = "builtin",
+
   pets = {
     {
       name = "Ilya",
 
       sprite_update_interval = 5,
       sprites = kitty_sprites,
+
+      -- Tints the sprite. red, green, yellow, blue, magenta, cyan or white,
+      -- and changeable per pet from the settings screen.
+      color_theme = "cyan",
 
       initial_mood = 75,
       initial_satiety = 75,
@@ -65,15 +144,93 @@ require('tamagotchi').setup({
 })
 ```
 
+Your pets are appended to the native ones. Two pets can't share a name.
+
+Mood and satiety decay by `decay_speed` points per second of wall-clock time,
+whether or not Neovim is running. `max_offline_decay_seconds` bounds how much a
+single absence can cost, so coming back from holiday doesn't flatten your pet.
+
 ## Native Pets
 
-- **Kitty**: a cat (moderate decay, balanced)
-- **Lucy**: a star and mascot of the [Gleam programming language](https://gleam.run/) (faster decay, food-focused)
-- **Churro**: a dog (moderate decay, mood-focused)
-- **Bunny**: a bunny (active, high satiety needs)
-- **Dragon**: a dragon (slow decay, hardy)
-- **Grizz**: a bear (moderate decay, very hungry)
-  
+- **Sasha**: a cat, blue (moderate decay, balanced)
+- **Lucy**: a star and mascot of the [Gleam programming language](https://gleam.run/), red (faster decay, food-focused)
+- **Churro**: a dog, yellow (moderate decay, mood-focused)
+- **Bunny**: a bunny, magenta (active, high satiety needs)
+- **Dragon**: a dragon, green (slow decay, hardy)
+- **Grizz**: a bear, white (fast decay, very hungry)
+- **Po**: a small bear, cyan (moderate decay, easygoing)
+
+Each comes tinted; `s` then `c` in the pet window picks a different color, and
+resetting the pet puts its default back.
+
+## Statusline
+
+```lua
+vim.o.statusline = "%!v:lua.require'tamagotchi.statusline'.get()"
+```
+
+With lualine:
+
+```lua
+require("lualine").setup({
+  sections = { lualine_x = { "tamagotchi" } },
+})
+```
+
+Both accept `{ ascii = true }` for a terminal without emoji, and
+`{ name = false }` to show only the stats. The string is rebuilt once per tick,
+not on every redraw.
+
+## Highlights
+
+Every group is linked with `default = true`, so setting one before or after
+`setup()` wins.
+
+| group | links to | used for |
+| --- | --- | --- |
+| `TamagotchiNormal` / `TamagotchiBorder` | `NormalFloat` / `FloatBorder` | float body and border |
+| `TamagotchiTitle` / `TamagotchiFooter` | `FloatTitle` / `FloatFooter` | border title and footer |
+| `TamagotchiRule` | `FloatBorder` | inner dividers |
+| `TamagotchiKey` | `Special` | the key in a `key label` pair |
+| `TamagotchiMuted` | `Comment` | stat labels, separators |
+| `TamagotchiSelection` | `PmenuSel` | the selected row in the pet menu |
+| `TamagotchiBarHigh` / `Med` / `Low` / `Empty` | `DiagnosticOk` / `Warn` / `Error` / `NonText` | resting stat bars, by how full they are |
+| `TamagotchiTrendUp` / `Down` / `Flat` | `DiagnosticOk` / `DiagnosticError` / `NonText` | a stat that just moved, and the `·` marker for one that has not |
+| `TamagotchiSick` / `TamagotchiDead` | `DiagnosticWarn` / `Comment` | health state in the title |
+| `TamagotchiColor*` | assorted | per-pet sprite color themes |
+
+## Stakes
+
+Off by default. With `stakes = true`, a pet left at rock-bottom mood or satiety
+gets sick after `sick_after_seconds` and dies after `death_after_seconds`. A
+dead pet stops decaying, shows a tombstone, and can be brought back with
+`:Tamagotchi revive`. Choosing "start new life" in the pet menu archives it to
+`graveyard/` rather than deleting it.
+
+## Data
+
+Pets live in `stdpath("data")/tamagotchi/`:
+
+```
+state.json         which pet was active last
+pets/<name>.json   one file per pet
+graveyard/         archived pets
+```
+
+Which pet loads at startup is whichever you used last, not `default_pet` —
+`default_pet` only decides where you begin. Save files from before this layout
+(`stdpath("data")/tamagotchi_<name>.json`) are migrated automatically on first
+run and left in place; once you've confirmed everything came across, they can be
+deleted.
+
 ## Contributing
+
+```sh
+nix develop     # neovim, stylua, luacheck, busted
+make ci         # exactly what CI runs
+```
+
+`make test` runs the specs in headless Neovim; `make format` applies stylua.
+`doc/tamagotchi.txt` is generated from this README by CI — don't edit it by hand.
 
 Submit issues and PRs as you please. If you have a more general question, start a [discussion](https://github.com/raquentin/tamagotchi.nvim/discussions).

@@ -1,0 +1,14 @@
+# neovim
+.nvimlog
+
+# luarocks / test deps
+.luarocks/
+lua_modules/
+luarocks/
+
+# nix
+result
+result-*
+.direnv/
+
+*.tmp

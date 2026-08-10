@@ -1,104 +1,108 @@
+-- Lucy, the star mascot of the Gleam programming language.
+--
+-- Every frame moves the face and at least one point, so an idle Lucy shimmers
+-- rather than sitting frozen. ASCII on purpose: this is the widest sprite in
+-- the plugin, and its outline would carry five multibyte glyphs per frame.
 local lucy_sprites = {
-    height = 5,
-    width = 9,
-
     happy = {
         [[
-    ^    
-   / \   
-< ( ^.^ ) >
-   \ /   
-    v    
+    /\
+ __/  \__
+ \  ^ ^  /
+  \  v  /
+  /_\ /_\
 ]],
         [[
-    ^    
-   / \   
-< ( o^o ) >
-   \ /   
-    v    
+.   /\    .
+ __/  \__
+ \  o o  /
+  \  w  /
+  /_\ /_\
 ]],
         [[
-    ^    
-   / \   
-< ( ^w^ ) >
-   \ /   
-    v    
+    /\
+ __/  \__
+ \  ^ ^  /
+  \  o  /
+  /_\ /_\
 ]],
         [[
-    ^    
-   / \   
-< ( *^* ) >
-   \ /   
-    v    
+*   /\    *
+ __/  \__
+ \  - -  /
+  \  w  /
+  /_\ /_\
 ]],
         [[
-    *    
-   / \   
-< ( ^o^ ) >
-   \ /   
-    *    
+    /\
+ __/  \__
+ \  o o  /
+  \  v  /
+  /_\ /_\
 ]],
     },
 
+    -- The tip droops and the arms sag; a hungry star has nothing left to
+    -- twinkle with.
     hungry = {
         [[
-    ^    
-   / \   
-< ( -.- ) >
-   \ /   
-    v    
+    /\
+ __/  \__
+ \  - -  /
+  \  n  /
+  /_\ /_\
 ]],
         [[
-    ^    
-   / \   
-< ( ._. ) >
-   \ /   
-    v    
+    \/
+ __/  \__
+ \  o o  /
+  \  n  /
+  /_\ /_\
 ]],
         [[
-    .    
-   / \   
-< ( o_o ) >
-   \ /   
-    .    
+    \/
+ _./  \._
+ \  ; ;  /
+  \  n  /
+  /_. ._\
 ]],
         [[
-    .    
-   / \   
-< ( ;_; ) >
-   \ /   
-    .    
+    /\
+ _./  \._
+ \  ; ;  /
+  \  o  /
+  /_. ._\
 ]],
     },
 
     neutral = {
         [[
-    ^    
-   / \   
-< ( -.- ) >
-   \ /   
-    v    
+    /\
+ __/  \__
+ \  - -  /
+  \  .  /
+  /_\ /_\
 ]],
         [[
-    ^    
-   / \   
-< ( -_- ) >
-   \ /   
-    v    
+.   /\
+ __/  \__
+ \  o o  /
+  \  .  /
+  /_\ /_\
 ]],
         [[
-    ^    
-   / \   
-< ( o_o ) >
-   \ /   
-    v    
+    /\
+ __/  \__
+ \  - -  /
+  \  v  /
+  /_\ /_\
 ]],
         [[
-    ^    
-   / \   
-< ( u_u ) >
-   \ /   
-    v    
+    /\    .
+ __/  \__
+ \  u u  /
+  \  .  /
+  /_\ /_\
 ]],
     },
 }

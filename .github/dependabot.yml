@@ -1,0 +1,7 @@
+version: 2
+updates:
+  # The workflows SHA-pin their actions, so without this the pins silently rot.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
