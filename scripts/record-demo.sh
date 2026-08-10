@@ -35,6 +35,11 @@ if ! fc-list : family | grep -qi "JetBrains Mono"; then
     done
 fi
 
+# The colorscheme, fetched the same way, so the recording does not depend on
+# whatever is installed for the person running it.
+CATPPUCCIN="$(nix build --no-link --print-out-paths nixpkgs#vimPlugins.catppuccin-nvim)"
+export CATPPUCCIN
+
 mkdir -p "$REPO_ROOT/media"
 cd "$REPO_ROOT"
 

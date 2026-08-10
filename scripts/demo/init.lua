@@ -14,7 +14,18 @@ vim.g.mapleader = " "
 
 vim.o.termguicolors = true
 vim.o.background = "dark"
-vim.cmd.colorscheme("default")
+
+-- Catppuccin Mocha, matching the terminal theme the tape sets, so the padding
+-- around the frame is the same colour as the editor inside it. record-demo.sh
+-- exports $CATPPUCCIN; without it the stock colorscheme still records fine, it
+-- just resolves several of the sprite themes nearly white.
+local catppuccin = os.getenv("CATPPUCCIN")
+if catppuccin and vim.fn.isdirectory(catppuccin) == 1 then
+    vim.opt.runtimepath:prepend(catppuccin)
+    vim.cmd.colorscheme("catppuccin-mocha")
+else
+    vim.cmd.colorscheme("default")
+end
 
 vim.o.number = true
 vim.o.signcolumn = "yes"

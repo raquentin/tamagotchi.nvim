@@ -86,11 +86,11 @@ Type "s"
 Sleep 3s
 Type "c"
 Sleep 2s
-# Yellow, because the themes are highlight links and the stock colorscheme
-# resolves most of them pale: `magenta` is `Constant` (#e0e2ea) and `red` is
-# `ErrorMsg` (#ffc0b9), neither of which reads as a change from Sasha's blue.
-# `yellow` is `WarningMsg` (#fce094), which does.
-Type "3"
+# Red. The themes are highlight links, so which ones read as a change depends on
+# the colorscheme: under Mocha `red` is #f38ba8 against Sasha's #89b4fa, while
+# `green` links to `DiffAdd`, which is background-only here and would tint
+# nothing at all.
+Type "1"
 Sleep 3s
 
 # Back to Sasha's own blue.
