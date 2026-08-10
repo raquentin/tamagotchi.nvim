@@ -1,4 +1,4 @@
-*tamagotchi.txt*          For NVIM v0.8.0          Last change: 2026 August 08
+*tamagotchi.txt*          For NVIM v0.8.0          Last change: 2026 August 10
 
 ==============================================================================
 Table of Contents                               *tamagotchi-table-of-contents*
@@ -10,6 +10,7 @@ Table of Contents                               *tamagotchi-table-of-contents*
   - Configuration              |tamagotchi-🐱-tamagotchi.nvim-configuration|
   - Native Pets                  |tamagotchi-🐱-tamagotchi.nvim-native-pets|
   - Statusline                    |tamagotchi-🐱-tamagotchi.nvim-statusline|
+  - Highlights                    |tamagotchi-🐱-tamagotchi.nvim-highlights|
   - Stakes                            |tamagotchi-🐱-tamagotchi.nvim-stakes|
   - Data                                |tamagotchi-🐱-tamagotchi.nvim-data|
   - Contributing                |tamagotchi-🐱-tamagotchi.nvim-contributing|
@@ -25,7 +26,7 @@ https://github.com/user-attachments/assets/8462955d-ad6c-4499-9d9f-8265ba00fd0f
 
 FEATURES                            *tamagotchi-🐱-tamagotchi.nvim-features*
 
-- Floating Window UI: Displays your pet with sprite animations, stats, and a colored bottom bar with interactive tabs.
+- Floating Window UI: Displays your pet with sprite animations, stat bars, and a row of interaction keys. Follows your colorscheme and your `'winborder'`.
 - Customizable Behavior: Configure tick length, decay speed, and Vim events that affect your pet’s mood and satiety.
 - Multiple Pets: Manage a list of pets, select different ones from a menu, view more info, and reset as needed.
 - Persistent State: Your pet’s mood, satiety, and age persist across Neovim sessions.
@@ -92,13 +93,30 @@ Press `<leader>tg` to toggle the pet window, or use `:Tamagotchi`.
 Inside the pet window:
 
 >
-      [f]eed    [p]lay    pe[t]    [c]lean
-         pet [m]enu       [s]ettings
+    ╭──────────── Sasha · 2h 14m ────────────╮
+    │                                        │
+    │      /\_/\      mood    ███████▌░░ ▲    │
+    │     ( o.o )     satiety █████░░░░░ ·    │
+    │      > ^ <                             │
+    │                                        │
+    │────────────────────────────────────────│
+    │  f feed    p play    t pet    c clean  │
+    ╰────── m menu · s settings · ? help ────╯
 <
 
-plus `q` to close. Reset lives inside settings (`x`), not on the main window
-— it can delete every save. If your pet has died, the action row becomes
-`[R]evive`.
+The name and age label the window, the two bars are the things worth watching,
+and the verbs sit on the bottom row. `?` opens the key list, `q` closes. Every
+float in the plugin answers the same three: `?`, `q`, `<Esc>`.
+
+A resting bar is colored by how full it is — green above 60, yellow above 25,
+red below — so a starving pet looks starving. When a stat actually moves, the
+label, the bar and the marker all turn green (`▲`) or red (`▼`) together
+for two seconds; `·` means nothing has changed recently. Decay is fractional,
+so a fall only registers once a whole point has gone, which is about every 20s
+at the default decay speed.
+
+Reset lives inside settings (`x`), not on the main window — it can delete
+every save. If your pet has died, the action row becomes `R revive`.
 
 Each interaction has a cooldown, and repeating one in quick succession gives
 diminishing returns — you can’t top a bar up by spamming `:Tamagotchi
@@ -120,12 +138,30 @@ CONFIGURATION                  *tamagotchi-🐱-tamagotchi.nvim-configuration*
       sick_after_seconds = 6 * 3600,
       death_after_seconds = 24 * 3600,
     
+      ui = {
+        -- "auto" follows 'winborder' if you have set it, else rounded. Anything
+        -- nvim_open_win accepts works here, including a table of glyphs.
+        border = "auto",
+        -- Draw bars and rules in ASCII, for fonts that render the block glyphs
+        -- badly.
+        ascii = false,
+      },
+    
+      -- "builtin" is the animated menu with sprite previews; "native" hands the
+      -- pet list to vim.ui.select, so telescope / snacks / fzf-lua users get the
+      -- picker they already configured.
+      picker = "builtin",
+    
       pets = {
         {
           name = "Ilya",
     
           sprite_update_interval = 5,
           sprites = kitty_sprites,
+    
+          -- Tints the sprite. red, green, yellow, blue, magenta, cyan or white,
+          -- and changeable per pet from the settings screen.
+          color_theme = "cyan",
     
           initial_mood = 75,
           initial_satiety = 75,
@@ -158,13 +194,16 @@ pet.
 
 NATIVE PETS                      *tamagotchi-🐱-tamagotchi.nvim-native-pets*
 
-- **Sasha**: a cat (moderate decay, balanced)
-- **Lucy**: a star and mascot of the Gleam programming language <https://gleam.run/> (faster decay, food-focused)
-- **Churro**: a dog (moderate decay, mood-focused)
-- **Bunny**: a bunny (active, high satiety needs)
-- **Dragon**: a dragon (slow decay, hardy)
-- **Grizz**: a bear (fast decay, very hungry)
-- **Po**: a small bear (moderate decay, easygoing)
+- **Sasha**: a cat, blue (moderate decay, balanced)
+- **Lucy**: a star and mascot of the Gleam programming language <https://gleam.run/>, red (faster decay, food-focused)
+- **Churro**: a dog, yellow (moderate decay, mood-focused)
+- **Bunny**: a bunny, magenta (active, high satiety needs)
+- **Dragon**: a dragon, green (slow decay, hardy)
+- **Grizz**: a bear, white (fast decay, very hungry)
+- **Po**: a small bear, cyan (moderate decay, easygoing)
+
+Each comes tinted; `s` then `c` in the pet window picks a different color, and
+resetting the pet puts its default back.
 
 
 STATUSLINE                        *tamagotchi-🐱-tamagotchi.nvim-statusline*
@@ -185,6 +224,44 @@ Both accept `{ ascii = true }` for a terminal without emoji, and `{ name =
 false }` to show only the stats. The string is rebuilt once per tick, not on
 every redraw.
 
+
+HIGHLIGHTS                        *tamagotchi-🐱-tamagotchi.nvim-highlights*
+
+Every group is linked with `default = true`, so setting one before or after
+`setup()` wins.
+
+  -----------------------------------------------------------------------
+  group                   links to                used for
+  ----------------------- ----------------------- -----------------------
+  TamagotchiNormal /      NormalFloat /           float body and border
+  TamagotchiBorder        FloatBorder             
+
+  TamagotchiTitle /       FloatTitle /            border title and footer
+  TamagotchiFooter        FloatFooter             
+
+  TamagotchiRule          FloatBorder             inner dividers
+
+  TamagotchiKey           Special                 the key in a key label
+                                                  pair
+
+  TamagotchiMuted         Comment                 stat labels, separators
+
+  TamagotchiSelection     PmenuSel                the selected row in the
+                                                  pet menu
+
+  TamagotchiBarHigh / Med DiagnosticOk / Warn /   resting stat bars, by
+  / Low / Empty           Error / NonText         how full they are
+
+  TamagotchiTrendUp /     DiagnosticOk /          a stat that just moved,
+  Down / Flat             DiagnosticError /       and the · marker for
+                          NonText                 one that has not
+
+  TamagotchiSick /        DiagnosticWarn /        health state in the
+  TamagotchiDead          Comment                 title
+
+  TamagotchiColor*        assorted                per-pet sprite color
+                                                  themes
+  -----------------------------------------------------------------------
 
 STAKES                                *tamagotchi-🐱-tamagotchi.nvim-stakes*
 
