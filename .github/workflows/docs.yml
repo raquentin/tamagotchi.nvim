@@ -26,7 +26,7 @@ jobs:
 
       # SHA-pinned deliberately: this job holds write access to the default
       # branch, so a floating @main ref here would be a supply-chain hole.
-      - uses: kdheepak/panvimdoc@662fb20304d20c539fb48a0bda628f5165507de7 # v4.0.1
+      - uses: kdheepak/panvimdoc@4c8eaecb80058694171627629c6ff59bcf41472d # v6.0.0
         with:
           vimdoc: tamagotchi
           treesitter: true
