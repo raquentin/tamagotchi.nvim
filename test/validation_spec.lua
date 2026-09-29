@@ -204,6 +204,28 @@ describe("input validation", function()
             )
         end)
 
+        it("rejects a fractional decay_speed", function()
+            assert.has_error(
+                function()
+                    config.setup({
+                        pets = { { name = "TestPet", decay_speed = 2.5 } },
+                    })
+                end
+            )
+        end)
+
+        it("rejects a non-positive sprite_update_interval", function()
+            assert.has_error(
+                function()
+                    config.setup({
+                        pets = {
+                            { name = "TestPet", sprite_update_interval = 0 },
+                        },
+                    })
+                end
+            )
+        end)
+
         it("accepts valid pet configuration", function()
             assert.has_no.errors(
                 function()
@@ -226,6 +248,68 @@ describe("input validation", function()
                     })
                 end
             )
+        end)
+    end)
+
+    describe("top-level options", function()
+        local original_notify = vim.notify
+
+        after_each(function() vim.notify = original_notify end)
+
+        local bad = {
+            { window_toggle_keybind = "" },
+            { window_toggle_keybind = true },
+            { tick_length_ms = 0 },
+            { tick_length_ms = 1.5 },
+            { idle_tick_ms = -1 },
+            { max_offline_decay_seconds = "8h" },
+            { sick_after_seconds = -1 },
+            { sick_after_seconds = 100, death_after_seconds = 10 },
+            { stakes = "yes" },
+            { ui = "rounded" },
+            { ui = { border = 1 } },
+            { ui = { ascii = 1 } },
+            { picker = "telescope" },
+            { default_pet = "Nobody" },
+        }
+
+        for _, opts in ipairs(bad) do
+            it("rejects " .. vim.inspect(opts, { newline = "" }), function()
+                assert.has_error(function() config.setup(opts) end)
+            end)
+        end
+
+        it("accepts the defaults", function()
+            assert.has_no.errors(function() config.setup({}) end)
+        end)
+
+        it("accepts a table border and a disabled keybind", function()
+            assert.has_no.errors(
+                function()
+                    config.setup({
+                        window_toggle_keybind = false,
+                        ui = { border = { "+", "-", "+", "|" } },
+                    })
+                end
+            )
+        end)
+
+        it("accepts a default_pet defined by the user", function()
+            assert.has_no.errors(
+                function()
+                    config.setup({
+                        default_pet = "Ilya",
+                        pets = { { name = "Ilya" } },
+                    })
+                end
+            )
+        end)
+
+        it("warns about an unknown option", function()
+            local warned
+            vim.notify = function(msg) warned = msg end
+            config.setup({ tick_lenght_ms = 500 })
+            assert.is_truthy(warned and warned:find("tick_lenght_ms", 1, true))
         end)
     end)
 end)

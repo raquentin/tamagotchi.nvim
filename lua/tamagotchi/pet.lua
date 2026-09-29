@@ -142,8 +142,8 @@ local function apply_decay_rates(p, config)
 end
 
 local function apply_defaults(p, config)
-    p.initial_mood = p.initial_mood or config.initial_mood or 80
-    p.initial_satiety = p.initial_satiety or config.initial_satiety or 80
+    p.initial_mood = p.initial_mood or 80
+    p.initial_satiety = p.initial_satiety or 80
     p.mood = p.mood or p.initial_mood
     p.satiety = p.satiety or p.initial_satiety
 

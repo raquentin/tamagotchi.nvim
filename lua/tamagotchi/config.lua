@@ -223,6 +223,10 @@ M.defaults = {
 
 M.values = {}
 
+local function is_positive_integer(v)
+    return type(v) == "number" and v >= 1 and v % 1 == 0
+end
+
 -- Validate a single vim event definition
 local function validate_vim_event(event)
     assert(type(event) == "table", "vim event must be a table")
@@ -300,7 +304,74 @@ local function validate_pet(pet)
             pet.decay_speed >= 0 and pet.decay_speed <= 6,
             "decay_speed must be between 0 and 6"
         )
+        -- The rates are a lookup table, so 2.5 would silently fall back to 3.
+        assert(pet.decay_speed % 1 == 0, "decay_speed must be a whole number")
     end
+
+    if pet.sprite_update_interval then
+        assert(
+            is_positive_integer(pet.sprite_update_interval),
+            "sprite_update_interval must be a positive whole number"
+        )
+    end
+end
+
+-- Top-level options. Pet definitions are checked separately by validate_pet.
+local function validate_options(opts)
+    for key in pairs(opts) do
+        if M.defaults[key] == nil then
+            vim.notify(
+                ("tamagotchi: unknown option '%s' is ignored"):format(key),
+                vim.log.levels.WARN
+            )
+        end
+    end
+
+    local keybind = opts.window_toggle_keybind
+    assert(
+        keybind == false or (type(keybind) == "string" and #keybind > 0),
+        "window_toggle_keybind must be a non-empty string or false"
+    )
+
+    -- A 0ms repeat makes libuv fire once and stop, which kills the simulation.
+    assert(
+        is_positive_integer(opts.tick_length_ms),
+        "tick_length_ms must be a positive whole number"
+    )
+    assert(
+        is_positive_integer(opts.idle_tick_ms),
+        "idle_tick_ms must be a positive whole number"
+    )
+
+    for _, key in ipairs({
+        "max_offline_decay_seconds",
+        "sick_after_seconds",
+        "death_after_seconds",
+    }) do
+        assert(
+            type(opts[key]) == "number" and opts[key] >= 0,
+            key .. " must be a non-negative number"
+        )
+    end
+    assert(
+        opts.sick_after_seconds <= opts.death_after_seconds,
+        "sick_after_seconds must not exceed death_after_seconds"
+    )
+
+    assert(type(opts.stakes) == "boolean", "stakes must be a boolean")
+
+    assert(type(opts.ui) == "table", "ui must be a table")
+    local border = opts.ui.border
+    assert(
+        type(border) == "string" or type(border) == "table",
+        "ui.border must be a string or a table"
+    )
+    assert(type(opts.ui.ascii) == "boolean", "ui.ascii must be a boolean")
+
+    assert(
+        opts.picker == "builtin" or opts.picker == "native",
+        'picker must be "builtin" or "native"'
+    )
 end
 
 local function shallow_copy(t)
@@ -346,6 +417,7 @@ function M.setup(user_config)
         shallow_copy(M.defaults), shallow_copy(user_config)
     default_opts.pets, user_opts.pets = nil, nil
     local combined = vim.tbl_deep_extend("force", {}, default_opts, user_opts)
+    validate_options(combined)
 
     -- Copies, never the originals. v1 inserted M.defaults.pets[i] directly, and
     -- Pet:new then adopted that very table as the live pet -- so a pet's runtime
@@ -370,6 +442,14 @@ function M.setup(user_config)
 
     assert_unique_names(all_pets)
     table.sort(all_pets, function(a, b) return a.name < b.name end)
+
+    local default_pet = combined.default_pet
+    assert(
+        vim.iter(all_pets):any(function(p) return p.name == default_pet end),
+        ("default_pet '%s' does not match any configured pet"):format(
+            tostring(default_pet)
+        )
+    )
 
     combined.pets = all_pets
     M.values = combined

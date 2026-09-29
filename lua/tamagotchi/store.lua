@@ -290,7 +290,7 @@ end
 --
 -- state.json wins over `default_pet` on purpose: `default_pet` means "which pet
 -- do I start with", and a menu switch that does not survive a restart is not a
--- switch. Falls back to a fresh pet, then to a random one.
+-- switch. Falls back to a fresh `default_pet`, which config guarantees exists.
 function M.resolve_startup_pet()
     local Pet = require("tamagotchi.pet")
     local config = require("tamagotchi.config").values
@@ -312,18 +312,7 @@ function M.resolve_startup_pet()
         end
     end
 
-    local chosen = def_for(config.default_pet)
-
-    if not chosen then
-        assert(
-            config.pets and #config.pets > 0,
-            "No pets available in configuration"
-        )
-        math.randomseed(os.time())
-        chosen = config.pets[math.random(#config.pets)]
-    end
-
-    return Pet.from_def(chosen)
+    return Pet.from_def(def_for(config.default_pet))
 end
 
 return M

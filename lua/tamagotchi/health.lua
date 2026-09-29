@@ -107,20 +107,6 @@ local function check_storage()
     end
 end
 
--- An unrecognized value falls back to the builtin menu silently, which looks
--- like `picker` being ignored rather than misspelled.
-local function check_picker(picker)
-    if picker == "builtin" or picker == "native" then
-        health.info("picker: " .. picker)
-        return
-    end
-
-    health.warn(
-        ("unknown picker '%s'; using the builtin menu"):format(tostring(picker)),
-        { 'Valid values are "builtin" and "native".' }
-    )
-end
-
 local function check_config()
     health.start("configuration")
 
@@ -133,27 +119,7 @@ local function check_config()
     end
     health.ok(("%d pet(s) configured"):format(#pets))
 
-    local names = {}
-    for _, pet in ipairs(pets) do
-        names[#names + 1] = pet.name
-    end
-
-    if
-        config.default_pet and not vim.tbl_contains(names, config.default_pet)
-    then
-        health.warn(
-            ("default_pet '%s' does not match any configured pet"):format(
-                config.default_pet
-            ),
-            {
-                "A random pet is chosen instead, so you get a different one",
-                "each time there is no save to load.",
-                "Available: " .. table.concat(names, ", "),
-            }
-        )
-    elseif config.default_pet then
-        health.ok("default_pet: " .. config.default_pet)
-    end
+    health.ok("default_pet: " .. config.default_pet)
 
     -- Empty sprite sets render as a blank pet, which looks like a broken window.
     for _, pet in ipairs(pets) do
@@ -178,7 +144,7 @@ local function check_config()
         health.info("stakes disabled (default): pets cannot die")
     end
 
-    check_picker(config.picker)
+    health.info("picker: " .. config.picker)
 end
 
 local function check_keymap()

@@ -94,7 +94,7 @@ require('tamagotchi').setup({
 
       initial_mood = 75,
       initial_satiety = 75,
-      decay_speed = 2, -- 0-6 scale (0=none, 6=extreme)
+      decay_speed = 2, -- whole number 0-6 (0=none, 6=extreme)
 
       vim_events = {
         {
