@@ -132,14 +132,69 @@ function M.set_active_pet(name)
     })
 end
 
+-- Another Neovim saved this pet since `pet` last synced with disk. Adopt its
+-- state and replay only what happened here, so neither instance's feeding and
+-- counters are lost. `pet._synced` is the table this instance last read or wrote.
+local function merge_concurrent(pet, disk)
+    local Pet = require("tamagotchi.pet")
+    local base = pet._synced
+
+    -- A reset or revive is a deliberate fresh start, and wins outright.
+    if
+        pet.birth_time ~= base.birth_time or (base.died_at and not pet.died_at)
+    then
+        return
+    end
+
+    for _, k in ipairs(Pet.COUNTER_FIELDS) do
+        pet[k] = (disk[k] or 0) + (pet[k] or 0) - (base[k] or 0)
+    end
+
+    for verb, at in pairs(disk.last_interaction or {}) do
+        if at > (pet.last_interaction[verb] or -math.huge) then
+            pet.last_interaction[verb] = at
+            pet.interaction_streak[verb] = (disk.interaction_streak or {})[verb]
+        end
+    end
+
+    if pet.color_theme == base.color_theme then
+        pet.color_theme = disk.color_theme
+    end
+
+    local pending = pet.pending
+    pet.mood, pet.satiety = disk.mood, disk.satiety
+    pet:set_mood(pet.mood + pending.mood)
+    pet:set_satiety(pet.satiety + pending.satiety)
+
+    -- Decay resumes from where the other instance charged it to, so the time
+    -- both instances were open is only charged once.
+    pet.last_decay_time = disk.last_decay_time
+    pet.low_since = disk.low_since
+    pet.died_at = disk.died_at
+    pet:apply_decay()
+end
+
+-- Only one save per instance is merged at a time; two instances saving within
+-- the same few milliseconds can still lose one write.
 function M.save_pet(pet)
     if not pet or not pet.name then return false end
 
+    local path = M.pet_path(pet.name)
+
+    local disk = pet._synced and read_json(path)
+    if disk and disk.rev ~= pet._synced.rev then
+        merge_concurrent(pet, disk)
+        pet.rev = disk.rev
+    end
+
+    pet.rev = (pet.rev or 0) + 1
     pet.last_seen_time = os.time()
 
-    if not write_json(M.pet_path(pet.name), pet:to_table()) then
-        return false
-    end
+    local saved = pet:to_table()
+    if not write_json(path, saved) then return false end
+
+    pet._synced = vim.deepcopy(saved)
+    pet.pending = { mood = 0, satiety = 0 }
 
     return M.set_active_pet(pet.name)
 end
@@ -155,7 +210,9 @@ function M.load_pet(name)
     local data = read_json(M.pet_path(name))
     if not data then return nil end
 
-    local pet = Pet:new(Pet.migrate(data))
+    local migrated = Pet.migrate(data)
+    local pet = Pet:new(migrated)
+    pet._synced = vim.deepcopy(migrated)
     pet:apply_decay()
 
     return pet

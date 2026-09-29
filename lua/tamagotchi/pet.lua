@@ -72,6 +72,8 @@ local SAVE_FIELDS = {
     "low_since",
     "died_at",
     "schema_version",
+    -- Bumped on every write, so an instance can tell another one saved since.
+    "rev",
 }
 
 Pet.DEF_FIELDS = DEF_FIELDS
@@ -102,6 +104,8 @@ local ZERO_FIELDS = {
     "times_petted",
     "times_cleaned",
 }
+
+Pet.COUNTER_FIELDS = ZERO_FIELDS
 
 -- Timestamps that default to "now" when absent.
 local NOW_FIELDS = { "birth_time", "last_decay_time", "last_seen_time" }
@@ -196,6 +200,10 @@ function Pet:new(o)
     p.sprite_indices = { happy = 1, hungry = 1, neutral = 1 }
     p.last_state = nil
 
+    -- Stat changes since the last save that did not come from decay, so a save
+    -- that finds another instance's write can replay them on top of it.
+    p.pending = { mood = 0, satiety = 0 }
+
     return p
 end
 
@@ -223,14 +231,18 @@ function Pet:get_satiety() return self.satiety end
 
 function Pet:set_satiety(value)
     assert(type(value) == "number", "satiety must be a number")
+    local before = self.satiety
     self.satiety = clamp(value)
+    self.pending.satiety = self.pending.satiety + self.satiety - before
 end
 
 function Pet:get_mood() return self.mood end
 
 function Pet:set_mood(value)
     assert(type(value) == "number", "mood must be a number")
+    local before = self.mood
     self.mood = clamp(value)
+    self.pending.mood = self.pending.mood + self.mood - before
 end
 
 function Pet:get_age(now) return (now or os.time()) - self.birth_time end
@@ -336,8 +348,10 @@ function Pet:apply_decay(now)
     local mood_lost = self.mood_decay_rate * effective
     local satiety_lost = self.satiety_decay_rate * effective
 
-    self:set_mood(self.mood - mood_lost)
-    self:set_satiety(self.satiety - satiety_lost)
+    -- Not the setters: decay is recomputed from last_decay_time on merge, so
+    -- it must not count as a pending change.
+    self.mood = clamp(self.mood - mood_lost)
+    self.satiety = clamp(self.satiety - satiety_lost)
 
     -- Track when neglect began, and clear it the moment either stat recovers,
     -- so a fed pet resets its illness clock rather than carrying it forever.

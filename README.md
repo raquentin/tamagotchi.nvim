@@ -119,6 +119,9 @@ Mood and satiety decay by `decay_speed` points per second of wall-clock time,
 whether or not Neovim is running. `max_offline_decay_seconds` bounds how much a
 single absence can cost, so coming long breaks don't hurt your pet.
 
+Several Neovim instances can share a pet. Each save merges in whatever the
+others wrote since, so feeding it in one tmux pane isn't undone by another.
+
 ## Native Pets
 
 - **Sasha**: a cat (moderate decay, balanced)

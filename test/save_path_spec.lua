@@ -129,6 +129,104 @@ describe("store", function()
         end)
     end)
 
+    -- Two Neovims share one save file. Each loads the pet, so two Pet objects
+    -- loaded from the same file stand in for two instances here.
+    describe("concurrent instances", function()
+        local function two_instances()
+            local seed = Pet.from_def({ name = "Sasha" })
+            seed:set_mood(50)
+            seed:set_satiety(50)
+            store.save_pet(seed)
+            return store.load_pet("Sasha"), store.load_pet("Sasha")
+        end
+
+        it("keeps both instances' stat changes", function()
+            local a, b = two_instances()
+
+            a:set_mood(a.mood + 10)
+            store.save_pet(a)
+
+            b:set_satiety(b.satiety + 20)
+            store.save_pet(b)
+
+            local disk = store.load_pet("Sasha")
+            assert.is_near(60, disk.mood, 0.5)
+            assert.is_near(70, disk.satiety, 0.5)
+        end)
+
+        it("sums interaction counters", function()
+            local a, b = two_instances()
+
+            a.times_fed = a.times_fed + 1
+            store.save_pet(a)
+            b.times_fed = b.times_fed + 2
+            b.total_vim_events = b.total_vim_events + 5
+            store.save_pet(b)
+
+            local disk = store.load_pet("Sasha")
+            assert.are.equal(3, disk.times_fed)
+            assert.are.equal(5, disk.total_vim_events)
+        end)
+
+        it("keeps the most recent cooldown", function()
+            local a, b = two_instances()
+
+            a.last_interaction.feed = os.time()
+            store.save_pet(a)
+            store.save_pet(b)
+
+            assert.are.equal(
+                a.last_interaction.feed,
+                store.load_pet("Sasha").last_interaction.feed
+            )
+        end)
+
+        it("charges decay once for time both were open", function()
+            local a, b = two_instances()
+            local past = os.time() - 1000
+            a.last_decay_time, b.last_decay_time = past, past
+
+            a:apply_decay()
+            store.save_pet(a)
+            b:apply_decay()
+            store.save_pet(b)
+
+            assert.is_near(a.mood, store.load_pet("Sasha").mood, 0.5)
+        end)
+
+        it("does not merge when nobody else wrote", function()
+            local a = two_instances()
+            a:set_mood(80)
+            store.save_pet(a)
+            a:set_mood(90)
+            store.save_pet(a)
+            assert.is_near(90, store.load_pet("Sasha").mood, 0.5)
+        end)
+
+        it("lets a reset win over the other instance's progress", function()
+            local a, b = two_instances()
+
+            a:set_mood(a.mood + 30)
+            store.save_pet(a)
+            b:reset(os.time() + 1)
+            store.save_pet(b)
+
+            local disk = store.load_pet("Sasha")
+            assert.are.equal(b.birth_time, disk.birth_time)
+            assert.is_near(b.initial_mood, disk.mood, 0.5)
+        end)
+
+        it("keeps a colour chosen in the other instance", function()
+            local a, b = two_instances()
+
+            a.color_theme = "red"
+            store.save_pet(a)
+            store.save_pet(b)
+
+            assert.are.equal("red", store.load_pet("Sasha").color_theme)
+        end)
+    end)
+
     describe("state pointer", function()
         it("records the last active pet on save", function()
             store.save_pet(Pet.from_def({ name = "Lucy" }))
