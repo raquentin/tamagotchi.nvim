@@ -4,14 +4,10 @@ SHELL := bash
 .DEFAULT_GOAL := help
 
 # Only lua/ holds .lua files; plugin/ is a single lua-in-vim shim.
-LUA_DIRS := lua plugin
+LUA_DIRS := lua plugin test scripts
 
 STYLUA ?= stylua
 LUACHECK ?= luacheck
-
-# Pinned so a new stylua release cannot turn CI red with no repo change.
-# Keep in sync with .github/workflows/ci.yml and flake.nix.
-STYLUA_VERSION := 2.5.2
 
 .PHONY: help lint luacheck format test test-deps ci demo
 

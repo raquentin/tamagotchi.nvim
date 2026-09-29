@@ -29,6 +29,8 @@ jobs:
 
       # Pinned: with collapse_simple_statement = "Always" in stylua.toml, a new
       # stylua release can fail --check with no change to this repo.
+      # Keep in sync with the stylua in flake.nix's nixpkgs, so `make lint` in
+      # the dev shell checks exactly what CI does.
       - uses: JohnnyMorganz/stylua-action@76fd70c03e6340ceaf673366712db9b20560b402 # v5.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
