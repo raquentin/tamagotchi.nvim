@@ -269,4 +269,45 @@ describe("transfer_stats_to", function()
         assert.are.equal(from.birth_time, to.birth_time)
         assert.are.equal("Lucy", to.name)
     end)
+
+    it("carries every interaction counter and cooldown", function()
+        local from = Pet.from_def({ name = "Sasha" })
+        from.times_petted = 3
+        from.times_cleaned = 2
+        from.last_interaction = { feed = 123 }
+        from.interaction_streak = { feed = 1 }
+
+        local to = Pet.from_def({ name = "Lucy" })
+        from:transfer_stats_to(to)
+
+        assert.are.equal(3, to.times_petted)
+        assert.are.equal(2, to.times_cleaned)
+        assert.are.same({ feed = 123 }, to.last_interaction)
+        assert.are.same({ feed = 1 }, to.interaction_streak)
+        assert.are_not.equal(from.last_interaction, to.last_interaction)
+    end)
+
+    it("does not reset the illness clock", function()
+        config.setup({ stakes = true })
+        local from = Pet.from_def({ name = "Sasha" })
+        from:set_mood(5)
+        from.low_since = os.time() - 7 * 3600
+        assert.are.equal("sick", from:health_state())
+
+        local to = Pet.from_def({ name = "Lucy" })
+        from:transfer_stats_to(to)
+
+        assert.are.equal("sick", to:health_state())
+    end)
+
+    it("keeps a dead pet dead", function()
+        config.setup({ stakes = true })
+        local from = Pet.from_def({ name = "Sasha" })
+        from.died_at = os.time() - 60
+
+        local to = Pet.from_def({ name = "Lucy" })
+        from:transfer_stats_to(to)
+
+        assert.is_true(to:is_dead())
+    end)
 end)

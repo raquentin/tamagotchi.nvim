@@ -429,6 +429,16 @@ function Pet:transfer_stats_to(target_pet)
     target_pet.total_satiety_gained = self.total_satiety_gained
     target_pet.times_fed = self.times_fed
     target_pet.times_played_with = self.times_played_with
+    target_pet.times_petted = self.times_petted
+    target_pet.times_cleaned = self.times_cleaned
+
+    target_pet.last_interaction = vim.deepcopy(self.last_interaction)
+    target_pet.interaction_streak = vim.deepcopy(self.interaction_streak)
+
+    -- The illness clock travels too, or switching appearance would be a way
+    -- to cheat death under `stakes`.
+    target_pet.low_since = self.low_since
+    target_pet.died_at = self.died_at
 end
 
 local function determine_state(pet)
