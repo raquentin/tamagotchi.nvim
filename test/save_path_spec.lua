@@ -80,6 +80,55 @@ describe("store", function()
         assert.is_nil(saved.session_start_time)
     end)
 
+    describe("crash safety", function()
+        local original_notify = vim.notify
+
+        after_each(function() vim.notify = original_notify end)
+
+        it("leaves no temp file behind after a save", function()
+            store.save_pet(Pet.from_def({ name = "Sasha" }))
+            local tmp = store.pet_path("Sasha") .. ".tmp"
+            assert.are.equal(0, vim.fn.filereadable(tmp))
+        end)
+
+        -- A truncated save used to read as "no save", so startup built a fresh
+        -- pet and the next autosave overwrote what was left of the old one.
+        it("moves an unreadable save aside instead of losing it", function()
+            vim.notify = function() end
+            local path = store.pet_path("Sasha")
+            vim.fn.mkdir(store.pets_dir(), "p")
+            vim.fn.writefile({ '{"name": "Sasha", "mood": 4' }, path)
+
+            assert.is_nil(store.load_pet("Sasha"))
+
+            assert.are.equal(0, vim.fn.filereadable(path))
+            local moved = vim.fn.glob(path .. ".corrupt-*", false, true)
+            assert.are.equal(1, #moved)
+            assert.are.same(
+                { '{"name": "Sasha", "mood": 4' },
+                vim.fn.readfile(moved[1])
+            )
+            vim.fn.delete(moved[1])
+        end)
+
+        it("warns when it moves a save aside", function()
+            local warned
+            vim.notify = function(msg, level)
+                if level == vim.log.levels.WARN then warned = msg end
+            end
+            local path = store.pet_path("Sasha")
+            vim.fn.mkdir(store.pets_dir(), "p")
+            vim.fn.writefile({}, path)
+
+            store.load_pet("Sasha")
+
+            assert.is_truthy(warned and warned:find("unreadable", 1, true))
+            for _, f in ipairs(vim.fn.glob(path .. ".corrupt-*", false, true)) do
+                vim.fn.delete(f)
+            end
+        end)
+    end)
+
     describe("state pointer", function()
         it("records the last active pet on save", function()
             store.save_pet(Pet.from_def({ name = "Lucy" }))

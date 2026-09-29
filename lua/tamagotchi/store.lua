@@ -50,14 +50,29 @@ local function ensure_dir(path)
     if vim.fn.isdirectory(path) == 0 then vim.fn.mkdir(path, "p") end
 end
 
+-- A save that exists but will not parse is moved aside rather than left in
+-- place, where the next save would overwrite it with a fresh pet.
+local function quarantine(path)
+    local dest = ("%s.corrupt-%d"):format(path, os.time())
+    vim.uv.fs_rename(path, dest)
+    vim.notify(
+        ("tamagotchi: %s was unreadable and has been moved to %s"):format(
+            path,
+            dest
+        ),
+        vim.log.levels.WARN
+    )
+end
+
 local function read_json(path)
     if vim.fn.filereadable(path) == 0 then return nil end
 
-    local lines = vim.fn.readfile(path)
-    if not lines or #lines == 0 then return nil end
-
-    local ok, data = pcall(vim.fn.json_decode, table.concat(lines, ""))
-    if not ok or type(data) ~= "table" then return nil end
+    local ok, data =
+        pcall(vim.fn.json_decode, table.concat(vim.fn.readfile(path), ""))
+    if not ok or type(data) ~= "table" then
+        quarantine(path)
+        return nil
+    end
 
     return data
 end
@@ -74,8 +89,14 @@ local function write_json(path, tbl)
         return false
     end
 
-    local failed = vim.fn.writefile({ encoded }, path)
-    if failed ~= 0 then
+    -- Write-then-rename, so a crash mid-write leaves the previous save intact
+    -- instead of a truncated one.
+    local tmp = path .. ".tmp"
+    if
+        vim.fn.writefile({ encoded }, tmp) ~= 0
+        or not vim.uv.fs_rename(tmp, path)
+    then
+        vim.fn.delete(tmp)
         vim.notify("tamagotchi: could not write " .. path, vim.log.levels.ERROR)
         return false
     end
