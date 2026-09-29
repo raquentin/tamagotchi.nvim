@@ -104,6 +104,35 @@ describe("illness and death", function()
             assert.are.equal(50, pet:get_mood())
         end)
 
+        -- The decay cap bounds how much stat a long absence costs, but not how
+        -- long a neglected pet has been neglected: time away still counts
+        -- toward illness and death, whether or not Neovim was running.
+        it(
+            "counts a long absence toward death despite the decay cap",
+            function()
+                pet:set_mood(5)
+                pet:apply_decay(T0 + 1)
+                assert.are.equal(T0 + 1, pet.low_since)
+
+                pet:apply_decay(T0 + 30 * 3600)
+
+                assert.are.equal("dead", pet:health_state(T0 + 30 * 3600))
+            end
+        )
+
+        it(
+            "does not start the clock for an absence that began healthy",
+            function()
+                pet:set_mood(100)
+                pet:set_satiety(100)
+
+                -- Decay is capped at 8h, which cannot bring 100 below the low mark.
+                pet:apply_decay(T0 + 30 * 3600)
+
+                assert.are.equal("alive", pet:health_state(T0 + 30 * 3600))
+            end
+        )
+
         it("records the time of death", function()
             pet.low_since = T0 - 25 * 3600
             pet:apply_decay(T0 + 1)

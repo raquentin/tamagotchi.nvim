@@ -115,9 +115,11 @@ require('tamagotchi').setup({
 
 Your pets are appended to the native ones.
 
-Mood and satiety decay by `decay_speed` points per second of wall-clock time,
-whether or not Neovim is running. `max_offline_decay_seconds` bounds how much a
-single absence can cost, so coming long breaks don't hurt your pet.
+Mood and satiety decay continuously with wall-clock time, whether or not Neovim
+is running: `decay_speed` 1 loses 0.01 points a second, up to 0.2 at 6.
+`max_offline_decay_seconds` caps how much of a single absence is charged. With
+`stakes` on, time away still counts toward illness and death once a stat is at
+10 or below.
 
 Several Neovim instances can share a pet. Each save merges in whatever the
 others wrote since, so feeding it in one tmux pane isn't undone by another.
