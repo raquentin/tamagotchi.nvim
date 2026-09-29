@@ -9,11 +9,12 @@ local M = {}
 
 M.timer = nil
 M.sprite_counter = 0
-M.autosave_counter = 0
+M.last_autosave = 0
 M.last_sprite = ""
 
--- Ticks between autosaves. v1 only saved on VimLeavePre, so a crash or a
--- `kill -9` silently discarded the whole session.
+-- Seconds between autosaves. v1 only saved on VimLeavePre, so a crash or a
+-- `kill -9` silently discarded the whole session. Wall time rather than a tick
+-- count, because the idle period stretches a tick to a minute.
 M.autosave_every = 60
 
 -- Current period, so retime() can avoid pointlessly restarting the timer.
@@ -55,9 +56,9 @@ function M.tick()
     local statusline = package.loaded["tamagotchi.statusline"]
     if statusline then statusline.invalidate() end
 
-    M.autosave_counter = M.autosave_counter + 1
-    if M.autosave_counter >= M.autosave_every then
-        M.autosave_counter = 0
+    local now = os.time()
+    if now - M.last_autosave >= M.autosave_every then
+        M.last_autosave = now
         require("tamagotchi.store").save_pet(pet)
     end
 end
@@ -81,6 +82,7 @@ function M.start()
 
     local period = M.period_ms()
     M._period_ms = period
+    M.last_autosave = os.time()
 
     M.timer = vim.uv.new_timer()
     -- First fire after one full period, not immediately: a 0ms first tick is

@@ -64,6 +64,35 @@ describe("tick", function()
         assert.has_no.errors(function() tick.force() end)
     end)
 
+    describe("autosave", function()
+        local store = require("tamagotchi.store")
+        local original = store.save_pet
+        local saves
+
+        before_each(function()
+            saves = 0
+            store.save_pet = function() saves = saves + 1 end
+        end)
+
+        after_each(function() store.save_pet = original end)
+
+        -- At the idle period a tick is a minute apart, so a tick-counted
+        -- autosave only reached disk once an hour.
+        it("saves once enough wall time has passed", function()
+            tick.start()
+            tick.last_autosave = os.time() - tick.autosave_every
+            tick.force()
+            assert.are.equal(1, saves)
+        end)
+
+        it("does not save again within the interval", function()
+            tick.start()
+            tick.force()
+            tick.force()
+            assert.are.equal(0, saves)
+        end)
+    end)
+
     describe("adaptive period", function()
         it(
             "idles slowly when no window is open",
