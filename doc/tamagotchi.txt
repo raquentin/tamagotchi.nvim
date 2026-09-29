@@ -1,4 +1,5 @@
-*tamagotchi.txt*          For NVIM v0.8.0          Last change: 2026 August 10
+*tamagotchi.txt*
+                             For NVIM v0.8.0    Last change: 2026 September 29
 
 ==============================================================================
 Table of Contents                               *tamagotchi-table-of-contents*
@@ -80,7 +81,7 @@ Press `<leader>tg` to toggle the pet window, or use `:Tamagotchi`.
                                       save
 
   :Tamagotchi feed / play / pet /     interact with your pet
-  clean                               
+  clean
 
   :Tamagotchi revive                  bring back a pet that died (see
                                       stakes)
@@ -98,12 +99,12 @@ CONFIGURATION                       *tamagotchi-tamagotchi.nvim-configuration*
       idle_tick_ms = 60000,                 -- while it is not
       default_pet = "Sasha",
       max_offline_decay_seconds = 8 * 3600, -- cap on time-away decay
-    
+
       -- see "stakes" below
       stakes = false,
       sick_after_seconds = 6 * 3600,
       death_after_seconds = 24 * 3600,
-    
+
       ui = {
         -- "auto" follows 'winborder' if you have set it, else rounded. Anything
         -- nvim_open_win accepts works here, including a table of glyphs.
@@ -112,27 +113,27 @@ CONFIGURATION                       *tamagotchi-tamagotchi.nvim-configuration*
         -- badly.
         ascii = false,
       },
-    
+
       -- "builtin" is the animated menu with sprite previews; "native" hands the
       -- pet list to vim.ui.select, so telescope / snacks / fzf-lua users get the
       -- picker they already configured.
       picker = "builtin",
-    
+
       pets = {
         {
           name = "Ilya",
-    
+
           sprite_update_interval = 5,
           sprites = kitty_sprites,
-    
+
           -- Tints the sprite. red, green, yellow, blue, magenta, cyan or white,
           -- and changeable per pet from the settings screen.
           color_theme = "cyan",
-    
+
           initial_mood = 75,
           initial_satiety = 75,
-          decay_speed = 2, -- 0-6 scale (0=none, 6=extreme)
-    
+          decay_speed = 2, -- whole number 0-6 (0=none, 6=extreme)
+
           vim_events = {
             {
               name = "BufWritePost",
@@ -152,9 +153,14 @@ CONFIGURATION                       *tamagotchi-tamagotchi.nvim-configuration*
 
 Your pets are appended to the native ones.
 
-Mood and satiety decay by `decay_speed` points per second of wall-clock time,
-whether or not Neovim is running. `max_offline_decay_seconds` bounds how much a
-single absence can cost, so coming long breaks don’t hurt your pet.
+Mood and satiety decay continuously with wall-clock time, whether or not Neovim
+is running: `decay_speed` 1 loses 0.01 points a second, up to 0.2 at 6.
+`max_offline_decay_seconds` caps how much of a single absence is charged. With
+`stakes` on, time away still counts toward illness and death once a stat is at
+10 or below.
+
+Several Neovim instances can share a pet. Each save merges in whatever the
+others wrote since, so feeding it in one tmux pane isn’t undone by another.
 
 
 NATIVE PETS                           *tamagotchi-tamagotchi.nvim-native-pets*
@@ -199,10 +205,10 @@ Every group is linked with `default = true`, so setting one before or after
   group                   links to                used for
   ----------------------- ----------------------- -----------------------
   TamagotchiNormal /      NormalFloat /           float body and border
-  TamagotchiBorder        FloatBorder             
+  TamagotchiBorder        FloatBorder
 
   TamagotchiTitle /       FloatTitle /            border title and footer
-  TamagotchiFooter        FloatFooter             
+  TamagotchiFooter        FloatFooter
 
   TamagotchiRule          FloatBorder             inner dividers
 
